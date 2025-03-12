@@ -51,7 +51,7 @@ class NumpyJSONEncoder(json.JSONEncoder):
         if isinstance(obj, (np.integer, np.int64)):
             return int(obj)
         elif isinstance(obj, (np.floating, np.float64)):
-            if np.isnan(obj) или np.isinf(obj):
+            if np.isnan(obj) or np.isinf(obj):  # Исправлено 'или' на 'or'
                 return None
             return float(obj)
         elif isinstance(obj, np.ndarray):
