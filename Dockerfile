@@ -13,7 +13,6 @@ RUN npm install
 COPY frontend/ .
 
 # Собираем приложение для продакшна с отключенным ESLint
-ENV DISABLE_ESLINT_PLUGIN=true
 RUN npm run build
 
 # Этап 2: Настройка Python для бэкенда
