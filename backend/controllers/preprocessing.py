@@ -481,3 +481,72 @@ async def set_scaling_params(result_id: str, params: dict):
             raise HTTPException(status_code=500, detail=f"Ошибка сервера: {str(e)}")
     
     return await with_file_lock(result_id, process_manual_params)
+
+@router.post("/apply-inverse-scaling/{result_id}")
+@handle_exceptions
+async def apply_inverse_scaling_to_result(result_id: str, data: dict):
+    """
+    Применяет обратное масштабирование к столбцам результата обработки.
+    """
+    # Проверка обрабатывается ли файл
+    if is_file_processing(result_id):
+        return {"status": "processing", "message": "Файл в данный момент обрабатывается"}
+    
+    columns = data.get("columns", [])
+    scaling_params = data.get("scaling_params")
+    
+    if not columns or not scaling_params:
+        raise HTTPException(status_code=400, detail="Необходимо указать столбцы и параметры масштабирования")
+    
+    async def process_inverse_scaling():
+        # Проверяем существование результата
+        result_path = get_processed_file_path(result_id)
+        
+        if not result_path.exists():
+            raise HTTPException(status_code=404, detail="Результат не найден")
+        
+        # Загружаем данные
+        df = pd.read_csv(result_path)
+        
+        # Создаем уникальный ID для нового результата
+        new_result_id = str(uuid.uuid4())
+        
+        # Применяем обратное масштабирование
+        processed_df = apply_inverse_scaling(df, columns, scaling_params)
+        
+        # Сохраняем результат
+        new_result_path = get_processed_file_path(new_result_id)
+        processed_df.to_csv(new_result_path, index=False)
+        
+        # Получаем исходные метаданные
+        metadata_path = result_path.parent / f"{result_id}_metadata.json"
+        if metadata_path.exists():
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+        else:
+            metadata = {}
+        
+        # Обновляем метаданные
+        metadata["parent_result_id"] = result_id
+        metadata["result_id"] = new_result_id
+        metadata["row_count"] = len(processed_df)
+        metadata["column_count"] = len(processed_df.columns)
+        metadata["columns"] = processed_df.columns.tolist()
+        metadata["inverse_scaling_applied"] = {
+            "columns": columns,
+            "scaling_params": scaling_params
+        }
+        
+        # Сохраняем метаданные
+        new_metadata_path = new_result_path.parent / f"{new_result_id}_metadata.json"
+        with open(new_metadata_path, "w") as f:
+            json.dump(metadata, f, cls=NumpyEncoder)
+        
+        # Применяем convert_numpy_types к результату перед возвратом
+        return convert_numpy_types({
+            "result_id": new_result_id,
+            "status": "completed",
+            "metadata": metadata
+        })
+    
+    return await with_file_lock(result_id, process_inverse_scaling)

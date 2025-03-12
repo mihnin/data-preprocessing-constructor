@@ -153,6 +153,42 @@
           </el-form-item>
         </el-form>
       </el-tab-pane>
+      
+      <!-- Новая вкладка для обратного масштабирования -->
+      <el-tab-pane label="Обратное преобразование" name="inverse" v-if="hasScalingParams">
+        <p>
+          Применить обратное масштабирование к выбранным столбцам.
+        </p>
+        
+        <el-form label-width="200px">
+          <el-form-item label="Столбцы для преобразования:">
+            <el-select 
+              v-model="inverseScalingColumns" 
+              multiple
+              placeholder="Выберите столбцы"
+            >
+              <el-option
+                v-for="column in getScaledColumns()"
+                :key="column"
+                :label="column"
+                :value="column"
+              />
+            </el-select>
+          </el-form-item>
+          
+          <el-form-item>
+            <el-button 
+              type="primary" 
+              @click="applyInverseScaling"
+              :disabled="inverseScalingColumns.length === 0 || isApplying"
+            >
+              <i class="el-icon-refresh" v-if="!isApplying"></i>
+              <i class="el-icon-loading" v-else></i>
+              {{ isApplying ? 'Применение...' : 'Применить обратное масштабирование' }}
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -181,10 +217,24 @@ export default {
     availableColumns: {
       type: Array,
       default: () => []
+    },
+    // Новые параметры
+    mode: {
+      type: String,
+      default: 'result', // 'result' или 'dataset'
+      validator: (value) => ['result', 'dataset'].includes(value)
+    },
+    datasetId: {
+      type: String,
+      default: null
+    },
+    scalingParams: {
+      type: Object,
+      default: () => ({})
     }
   },
   
-  emits: ['update:scaling-params', 'metadata-updated'],
+  emits: ['update:scaling-params', 'metadata-updated', 'inverse-scaling-applied'],
   
   setup(props, { emit }) {
     // Активная вкладка
@@ -205,6 +255,10 @@ export default {
       columns: [],
       parameters: {}
     });
+    
+    // Состояние обратного масштабирования
+    const inverseScalingColumns = ref([]);
+    const isApplying = ref(false);
     
     // Инициализация параметров для выбранных столбцов
     watch(() => manualParams.columns, (newColumns, oldColumns) => {
@@ -379,6 +433,50 @@ export default {
       }
     };
     
+    // Функция для получения столбцов, к которым применимо масштабирование
+    const getScaledColumns = () => {
+      if (!props.hasScalingParams) return [];
+      
+      // Получаем список столбцов из параметров масштабирования
+      if (props.scalingParams && props.scalingParams.parameters) {
+        return Object.keys(props.scalingParams.parameters);
+      }
+      
+      // Если параметры не определены явно, возвращаем все доступные столбцы
+      return props.availableColumns;
+    };
+    
+    // Функция для применения обратного масштабирования
+    const applyInverseScaling = async () => {
+      if (inverseScalingColumns.value.length === 0) return;
+      
+      isApplying.value = true;
+      
+      try {
+        const response = await preprocessingService.applyInverseScaling({
+          id: props.mode === 'dataset' ? props.datasetId : props.resultId,
+          columns: inverseScalingColumns.value,
+          mode: props.mode
+        });
+        
+        ElMessage({
+          message: 'Обратное масштабирование успешно применено',
+          type: 'success'
+        });
+        
+        // Оповещаем родительский компонент об успешном применении
+        emit('inverse-scaling-applied', response.data);
+        
+        // Очищаем выбранные столбцы
+        inverseScalingColumns.value = [];
+      } catch (error) {
+        console.error('Ошибка при применении обратного масштабирования:', error);
+        ElMessage.error(error.response?.data?.detail || 'Не удалось применить обратное масштабирование');
+      } finally {
+        isApplying.value = false;
+      }
+    };
+    
     return {
       activeTab,
       isExporting,
@@ -388,10 +486,14 @@ export default {
       selectedFile,
       manualParams,
       canSaveManualParams,
+      inverseScalingColumns,
+      isApplying,
       handleFileChange,
       exportMetadata,
       importMetadata,
-      saveManualParams
+      saveManualParams,
+      getScaledColumns,
+      applyInverseScaling
     };
   }
 };

@@ -167,6 +167,22 @@ def get_preprocessing_methods() -> List[Dict[str, Any]]:
                     "description": "Компоненты даты для извлечения"
                 }
             }
+        },
+        {
+            "method_id": "inverse_scaling",
+            "name": "Обратное масштабирование",
+            "description": "Отмена стандартизации или нормализации данных",
+            "applicable_types": ["numeric"],
+            "parameters": {
+                "scaling_params": {
+                    "type": "object",
+                    "description": "Параметры масштабирования для обратного преобразования"
+                },
+                "columns": {
+                    "type": "multiselect",
+                    "description": "Столбцы для обработки"
+                }
+            }
         }
     ]
     
@@ -417,6 +433,96 @@ def apply_preprocessing(df: pd.DataFrame, config: Dict[str, Any],
                             processed_df[f'{col}_day_of_year'] = processed_df[col].dt.dayofyear
                         elif component == "week_of_year":
                             processed_df[f'{col}_week_of_year'] = processed_df[col].dt.isocalendar().week
+        
+        elif method_id == "inverse_scaling":
+            scaling_params = parameters.get("scaling_params", {})
+            if not scaling_params:
+                continue
+                
+            standardization_params = scaling_params.get("standardization", {})
+            method_name = standardization_params.get("method")
+            columns = standardization_params.get("columns", [])
+            params = standardization_params.get("params", {})
+            
+            # Проверяем наличие столбцов в DataFrame
+            valid_columns = [col for col in columns if col in processed_df.columns]
+            if not valid_columns:
+                continue
+                
+            # Применяем обратное масштабирование
+            if method_name == "standard":
+                for col in valid_columns:
+                    if col in params:
+                        mean = params[col].get("mean", 0)
+                        std = params[col].get("std", 1)
+                        if std == 0:
+                            std = 1  # Избегаем деления на ноль
+                        
+                        # Обратное преобразование: x_original = x_scaled * std + mean
+                        processed_df[col] = processed_df[col] * std + mean
+                        
+            elif method_name == "minmax":
+                for col in valid_columns:
+                    if col in params:
+                        min_val = params[col].get("min", 0)
+                        max_val = params[col].get("max", 1)
+                        range_val = max_val - min_val
+                        if range_val == 0:
+                            range_val = 1  # Избегаем деления на ноль
+                        
+                        # Обратное преобразование: x_original = x_scaled * (max - min) + min
+                        processed_df[col] = processed_df[col] * range_val + min_val
+    
+    return processed_df
+
+def apply_inverse_scaling(df: pd.DataFrame, columns: List[str], scaling_params: Dict[str, Any]) -> pd.DataFrame:
+    """
+    Применяет обратное масштабирование к указанным столбцам.
+    
+    Args:
+        df: Исходный DataFrame
+        columns: Список столбцов для обратного масштабирования
+        scaling_params: Параметры масштабирования
+    
+    Returns:
+        DataFrame с обратно масштабированными данными
+    """
+    # Создаем копию DataFrame
+    processed_df = df.copy()
+    
+    # Получаем параметры стандартизации
+    standardization_params = scaling_params.get("standardization", {})
+    method_name = standardization_params.get("method")
+    params = standardization_params.get("params", {})
+    
+    # Фильтруем столбцы, которые есть в датафрейме
+    valid_columns = [col for col in columns if col in processed_df.columns and col in params]
+    
+    if not valid_columns:
+        # Если нет подходящих столбцов, возвращаем исходный DataFrame
+        return processed_df
+    
+    # Применяем обратное масштабирование в зависимости от метода
+    if method_name == "standard":
+        for col in valid_columns:
+            mean = params[col].get("mean", 0)
+            std = params[col].get("std", 1)
+            if std == 0:
+                std = 1  # Избегаем деления на ноль
+            
+            # Обратное преобразование: x_original = x_scaled * std + mean
+            processed_df[col] = processed_df[col] * std + mean
+    
+    elif method_name == "minmax":
+        for col in valid_columns:
+            min_val = params[col].get("min", 0)
+            max_val = params[col].get("max", 1)
+            range_val = max_val - min_val
+            if range_val == 0:
+                range_val = 1  # Избегаем деления на ноль
+            
+            # Обратное преобразование: x_original = x_scaled * (max - min) + min
+            processed_df[col] = processed_df[col] * range_val + min_val
     
     return processed_df
 
@@ -431,6 +537,7 @@ def getMethodName(method_id):
         'time_series_analysis': 'Анализ временных рядов',
         'lagging': 'Лагирование переменных',
         'rolling_statistics': 'Скользящие статистики',
-        'date_components': 'Извлечение компонентов даты'
+        'date_components': 'Извлечение компонентов даты',
+        'inverse_scaling': 'Обратное масштабирование'  # Добавленный метод
     }
     return method_names.get(method_id, method_id)

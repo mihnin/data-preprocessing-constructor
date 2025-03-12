@@ -50,5 +50,25 @@ export default {
   // Установка параметров масштабирования вручную
   setScalingParams(resultId, params) {
     return apiClient.post(`/preprocessing/set-scaling-params/${resultId}`, params);
+  },
+
+  // Метод для применения обратного масштабирования к датасету
+  applyInverseScalingToDataset(datasetId, data) {
+    return apiClient.post(`/datasets/${datasetId}/apply-inverse-scaling`, data);
+  },
+  
+  // Метод для применения обратного масштабирования к результату
+  applyInverseScalingToResult(resultId, data) {
+    return apiClient.post(`/preprocessing/apply-inverse-scaling/${resultId}`, data);
+  },
+  
+  // Общий метод, который выбирает нужный эндпоинт в зависимости от режима
+  applyInverseScaling(data) {
+    const { id, mode } = data;
+    if (mode === 'dataset') {
+      return this.applyInverseScalingToDataset(id, data);
+    } else {
+      return this.applyInverseScalingToResult(id, data);
+    }
   }
 };

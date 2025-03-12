@@ -323,6 +323,10 @@ export default defineComponent({
     const datasetId = computed(() => store.state.datasetId);
     const datasetInfo = ref(null);
     
+    // Добавляем получение параметров масштабирования из хранилища
+    const scalingParams = computed(() => store.state.scalingParams);
+    const hasScalingParams = computed(() => !!scalingParams.value);
+    
     // Состояние методов предобработки
     const methods = ref([]);
     const activeTab = ref('general');
@@ -460,23 +464,46 @@ export default defineComponent({
     
     // Выполнение полной предобработки
     const processData = async () => {
-      if (!hasSelectedMethods.value) return;
+      if (!hasSelectedMethods.value && !store.getters.hasScalingParams) {
+        ElMessage.warning('Выберите методы предобработки или загрузите параметры масштабирования');
+        return;
+      }
       
       isProcessing.value = true;
       
       try {
+        // Формируем список методов предобработки
+        const methods = [];
+        
+        // Добавляем выбранные методы
+        if (hasSelectedMethods.value) {
+          selectedMethodsList.value.forEach(method => {
+            methods.push({
+              method_id: method.method_id,
+              parameters: methodConfigs[method.method_id]
+            });
+          });
+        }
+        
+        // Если есть параметры масштабирования, добавляем метод inverse_scaling
+        if (store.getters.hasScalingParams) {
+          methods.push({
+            method_id: 'inverse_scaling',
+            parameters: {
+              scaling_params: store.state.scalingParams
+            }
+          });
+        }
+        
         const config = {
           dataset_id: datasetId.value,
-          methods: selectedMethodsList.value.map(method => ({
-            method_id: method.method_id,
-            parameters: methodConfigs[method.method_id]
-          }))
+          methods
         };
         
         const response = await preprocessingService.executePreprocessing(config);
         
         // Сохраняем ID результата в хранилище
-        store.commit('setResultId', response.data.result_id);
+        store.dispatch('setResult', response.data.result_id);
         
         ElMessage({
           message: 'Предобработка запущена успешно',
@@ -676,7 +703,10 @@ export default defineComponent({
       getOptionsForParam,
       getParametersSummary,
       isNewColumn,
-      getMethodName
+      getMethodName,
+      // Добавляем новые переменные
+      scalingParams,
+      hasScalingParams
     };
   }
 });

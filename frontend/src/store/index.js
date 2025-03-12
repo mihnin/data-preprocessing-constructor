@@ -4,7 +4,8 @@ export default createStore({
   state: {
     datasetId: null,
     resultId: null,
-    datasetInfo: null
+    datasetInfo: null,
+    scalingParams: null  // Параметры масштабирования данных
   },
   mutations: {
     setDatasetId(state, id) {
@@ -16,10 +17,14 @@ export default createStore({
     setDatasetInfo(state, info) {
       state.datasetInfo = info;
     },
+    setScalingParams(state, params) {
+      state.scalingParams = params;
+    },
     clearPreprocessingState(state) {
       state.datasetId = null;
       state.resultId = null;
       state.datasetInfo = null;
+      state.scalingParams = null;
     }
   },
   actions: {
@@ -32,12 +37,16 @@ export default createStore({
     setResult({ commit }, id) {
       commit('setResultId', id);
     },
+    setScalingParams({ commit }, params) {
+      commit('setScalingParams', params);
+    },
     resetState({ commit }) {
       commit('clearPreprocessingState');
     }
   },
   getters: {
     hasDataset: state => !!state.datasetId,
-    hasResult: state => !!state.resultId
+    hasResult: state => !!state.resultId,
+    hasScalingParams: state => !!state.scalingParams
   }
 })

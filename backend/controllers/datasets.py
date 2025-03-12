@@ -207,3 +207,115 @@ async def export_dataset(result_id: str, format: str = "csv"):
             raise HTTPException(status_code=500, detail=f"Ошибка сервера: {str(e)}")
     
     return await with_file_lock(result_id, process_export)
+
+# Функция для применения обратного масштабирования
+def apply_inverse_scaling(df: pd.DataFrame, columns: List[str], scaling_params: Dict[str, Any]) -> pd.DataFrame:
+    """
+    Применяет обратное масштабирование к указанным столбцам DataFrame.
+    
+    Args:
+        df: Исходный DataFrame
+        columns: Список столбцов для обратного масштабирования
+        scaling_params: Параметры масштабирования (тип и значения)
+    
+    Returns:
+        DataFrame с обратно масштабированными столбцами
+    """
+    result_df = df.copy()
+    
+    scaling_type = scaling_params.get("type")
+    
+    for column in columns:
+        if column not in df.columns:
+            continue
+            
+        if scaling_type == "standard":
+            # Обратное масштабирование для стандартизации (z-score)
+            mean = scaling_params.get("mean", {}).get(column)
+            std = scaling_params.get("std", {}).get(column)
+            if mean is not None and std is not None:
+                result_df[column] = result_df[column] * std + mean
+                
+        elif scaling_type == "minmax":
+            # Обратное масштабирование для MinMax
+            min_val = scaling_params.get("min", {}).get(column)
+            max_val = scaling_params.get("max", {}).get(column)
+            if min_val is not None and max_val is not None:
+                result_df[column] = result_df[column] * (max_val - min_val) + min_val
+                
+        elif scaling_type == "robust":
+            # Обратное масштабирование для RobustScaler
+            median = scaling_params.get("median", {}).get(column)
+            iqr = scaling_params.get("iqr", {}).get(column)
+            if median is not None and iqr is not None:
+                result_df[column] = result_df[column] * iqr + median
+    
+    return result_df
+
+@router.post("/{dataset_id}/apply-inverse-scaling")
+@handle_exceptions
+async def apply_inverse_scaling_to_dataset(dataset_id: str, data: dict):
+    """
+    Применяет обратное масштабирование к столбцам датасета.
+    """
+    # Проверка обрабатывается ли файл
+    if is_file_processing(dataset_id):
+        return {"status": "processing", "message": "Файл в данный момент обрабатывается"}
+    
+    columns = data.get("columns", [])
+    scaling_params = data.get("scaling_params")
+    
+    if not columns or not scaling_params:
+        raise HTTPException(status_code=400, detail="Необходимо указать столбцы и параметры масштабирования")
+    
+    async def process_inverse_scaling():
+        # Ищем исходный файл датасета
+        file_path = None
+        for ext in ["csv", "xlsx", "xls"]:
+            temp_path = get_file_path_by_id(dataset_id, ext)
+            if temp_path.exists():
+                file_path = temp_path
+                extension = ext
+                break
+        
+        if not file_path:
+            raise HTTPException(status_code=404, detail="Набор данных не найден")
+        
+        # Загружаем данные
+        df = await load_and_validate_dataframe(file_path, extension)
+        
+        # Создаем уникальный ID для результата
+        result_id = str(uuid.uuid4())
+        
+        # Применяем обратное масштабирование
+        processed_df = apply_inverse_scaling(df, columns, scaling_params)
+        
+        # Сохраняем результат
+        result_path = get_processed_file_path(result_id)
+        processed_df.to_csv(result_path, index=False)
+        
+        # Сохраняем метаданные
+        metadata = {
+            "dataset_id": dataset_id,
+            "result_id": result_id,
+            "row_count": len(processed_df),
+            "column_count": len(processed_df.columns),
+            "columns": processed_df.columns.tolist(),
+            "inverse_scaling_applied": {
+                "columns": columns,
+                "scaling_params": scaling_params
+            }
+        }
+        
+        metadata_path = result_path.parent / f"{result_id}_metadata.json"
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, cls=NumpyEncoder)
+        
+        # Применяем convert_numpy_types к результату перед возвратом
+        return convert_numpy_types({
+            "result_id": result_id,
+            "status": "completed",
+            "metadata": metadata
+        })
+    
+    return await with_file_lock(dataset_id, process_inverse_scaling)
