@@ -3,7 +3,8 @@ import HomeView from '../views/HomeView.vue'
 import DataUploadView from '../views/DataUploadView.vue'
 import PreprocessingView from '../views/PreprocessingView.vue'
 import PreviewExportView from '../views/PreviewExportView.vue'
-import AppHeader from '@/components/AppHeader.vue'  // <-- новый импорт
+// Удаляем неиспользуемый импорт
+// import AppHeader from '@/components/AppHeader.vue'  
 
 const routes = [
   {
