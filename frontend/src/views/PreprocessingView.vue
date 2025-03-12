@@ -656,7 +656,8 @@ export default defineComponent({
       formatOptionLabel,
       getOptionsForParam,
       getParametersSummary,
-      isNewColumn
+      isNewColumn,
+      getMethodName
     };
   }
 });
