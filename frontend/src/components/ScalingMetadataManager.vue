@@ -377,7 +377,7 @@ export default {
       }
     };
     
-    // Функция импорта метаданных
+    // Функция импорта метаданных - ИСПРАВЛЕННАЯ
     const importMetadata = async () => {
       // Check if either resultId or datasetId is available based on mode
       const id = props.mode === 'dataset' ? props.datasetId : props.resultId;
@@ -393,10 +393,15 @@ export default {
         formData.append('file', selectedFile.value);
         formData.append(props.mode === 'dataset' ? 'dataset_id' : 'result_id', id);
         
-        // Call the proper import endpoint based on mode
-        const response = props.mode === 'dataset' 
-          ? await preprocessingService.importMetadataForDataset(id, selectedFile.value)
-          : await preprocessingService.importMetadata(id, selectedFile.value);
+        // Call the proper import endpoint based on mode and extract scaling params from response
+        let response;
+        if (props.mode === 'dataset') {
+          response = await preprocessingService.importMetadataForDataset(id, selectedFile.value);
+        } else {
+          response = await preprocessingService.importMetadata(id, selectedFile.value);
+        }
+        
+        // Extract the scaling parameters from the response
         const scalingParams = response.data.scaling_params;
         
         ElMessage({
