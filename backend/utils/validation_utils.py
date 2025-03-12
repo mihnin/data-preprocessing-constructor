@@ -37,13 +37,14 @@ def validate_dataframe(df: pd.DataFrame, max_rows: int = 1000000) -> Tuple[bool,
     
     return True, None
 
-async def load_and_validate_dataframe(file_path: Path, extension: str) -> pd.DataFrame:
+async def load_and_validate_dataframe(file_path: Path, extension: str, encoding: str = 'utf-8') -> pd.DataFrame:
     """
     Загружает и валидирует DataFrame из файла.
     
     Args:
         file_path: Путь к файлу
         extension: Расширение файла
+        encoding: Кодировка файла (по умолчанию utf-8)
     
     Returns:
         pd.DataFrame: Загруженный и проверенный DataFrame
@@ -61,7 +62,7 @@ async def load_and_validate_dataframe(file_path: Path, extension: str) -> pd.Dat
             
             for sep in separators:
                 try:
-                    df = pd.read_csv(file_path, sep=sep)
+                    df = pd.read_csv(file_path, sep=sep, encoding=encoding)
                     # Если есть только один столбец, возможно разделитель неверный
                     if len(df.columns) > 1:
                         break
@@ -74,7 +75,7 @@ async def load_and_validate_dataframe(file_path: Path, extension: str) -> pd.Dat
                     detail="Не удалось правильно прочитать CSV файл. Проверьте формат и разделитель."
                 )
         else:  # Excel
-            df = pd.read_excel(file_path)
+            df = pd.read_excel(file_path, engine='openpyxl')
         
         # Валидируем DataFrame
         is_valid, error_message = validate_dataframe(df)
