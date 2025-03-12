@@ -206,11 +206,18 @@ async def get_data_preview(result_id: str, limit: int = 100):
         if not result_path.exists():
             raise HTTPException(status_code=404, detail="Результаты не найдены")
         
-        # Загружаем данные для предпросмотра
-        df = pd.read_csv(result_path, nrows=limit)
-        
-        # Применяем convert_numpy_types к результату перед возвратом
-        result = {"preview": df.to_dict(orient="records")}
-        return convert_numpy_types(result)
+        try:
+            # Загружаем данные для предпросмотра
+            df = pd.read_csv(result_path, nrows=limit)
+            
+            # Заменяем бесконечные значения и NaN на None перед сериализацией
+            df = df.replace([np.inf, -np.inf], np.nan)
+            
+            # Применяем convert_numpy_types к результату перед возвратом
+            result = {"preview": df.to_dict(orient="records")}
+            return convert_numpy_types(result)
+        except Exception as e:
+            log_error(e, f"Ошибка загрузки предпросмотра данных для result_id={result_id}")
+            raise HTTPException(status_code=500, detail=f"Ошибка загрузки данных: {str(e)}")
     
     return await with_file_lock(result_id, load_preview)

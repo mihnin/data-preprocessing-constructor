@@ -4,6 +4,9 @@ from pathlib import Path
 import logging
 from logging.handlers import RotatingFileHandler
 import time
+import json
+import numpy as np
+from fastapi.encoders import jsonable_encoder
 
 # Add the parent directory to sys.path to enable absolute imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -42,11 +45,25 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Определение пользовательского кодировщика JSON для обработки специальных значений NumPy
+class NumpyJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.int64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float64)):
+            if np.isnan(obj) or np.isinf(obj):
+                return None
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
 # Создание приложения FastAPI
 app = FastAPI(
     title="Конструктор предобработки данных API",
     description="API для анализа и предобработки наборов данных",
-    version="1.0.0"
+    version="1.0.0",
+    json_encoder=NumpyJSONEncoder  # Добавляем собственный кодировщик
 )
 
 # Middleware для измерения времени выполнения запросов

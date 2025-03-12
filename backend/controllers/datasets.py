@@ -18,6 +18,9 @@ from utils.validation_utils import load_and_validate_dataframe
 from utils.error_utils import handle_exceptions, log_error
 from utils.lock_utils import with_file_lock, is_file_processing
 
+# Добавляем импорт для временной директории
+from config.settings import TEMP_DIR
+
 router = APIRouter()
 
 # Добавляем класс для сериализации NumPy типов
@@ -152,9 +155,11 @@ async def set_target_column(dataset_id: str, data: dict):
 
 @router.get("/export/{result_id}")
 @handle_exceptions
-async def export_dataset(result_id: str):
+async def export_dataset(result_id: str, format: str = "csv"):
     """
     Экспорт обработанных данных.
+    
+    Поддерживаемые форматы: csv, excel.
     """
     async def process_export():
         try:
@@ -164,11 +169,36 @@ async def export_dataset(result_id: str):
             if not result_path.exists():
                 raise HTTPException(status_code=404, detail="Результаты не найдены")
             
-            return FileResponse(
-                result_path, 
-                filename=f"processed_data_{result_id}.csv",
-                media_type="text/csv"
-            )
+            # Загружаем данные
+            df = pd.read_csv(result_path, encoding='utf-8')
+            
+            if format.lower() == "excel":
+                # Создаем временный файл Excel
+                excel_path = TEMP_DIR / f"{result_id}.xlsx"
+                
+                # Используем openpyxl явно с полной настройкой параметров Unicode
+                with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                    df.to_excel(writer, index=False, sheet_name='Результаты')
+                
+                return FileResponse(
+                    excel_path, 
+                    filename=f"processed_data_{result_id}.xlsx",
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:  # По умолчанию CSV
+                # Сохраняем с BOM (Byte Order Mark) для распознавания кодировки Excel
+                csv_path = TEMP_DIR / f"{result_id}.csv"
+                df.to_csv(csv_path, index=False, encoding='utf-8-sig')
+                
+                return FileResponse(
+                    csv_path, 
+                    filename=f"processed_data_{result_id}.csv",
+                    media_type="text/csv",
+                    headers={
+                        "Content-Disposition": f'attachment; filename="processed_data_{result_id}.csv"',
+                        "Content-Type": "text/csv; charset=utf-8"
+                    }
+                )
         
         except HTTPException:
             raise

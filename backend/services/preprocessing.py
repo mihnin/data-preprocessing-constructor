@@ -2,6 +2,7 @@ import pandas as pd
 import json
 import time
 from pathlib import Path
+from typing import Dict, Any
 from ..utils.validation_utils import load_and_validate_dataframe
 from ..utils.file_utils import get_processed_file_path
 from ..utils.json_utils import NumpyEncoder
@@ -76,7 +77,30 @@ async def process_data(dataset_id: str, result_id: str, config, file_path: Path,
         with open(error_path, "w", encoding="utf-8") as f:
             f.write(str(e))
 
-def apply_preprocessing(df: pd.DataFrame, config: dict, progress_callback=None) -> pd.DataFrame:
+def getMethodName(method_id: str) -> str:
+    """
+    Возвращает читаемое название метода по его идентификатору.
+    
+    Args:
+        method_id: Идентификатор метода обработки
+        
+    Returns:
+        Читаемое название метода
+    """
+    # Словарь соответствия идентификаторов методов их названиям
+    method_names = {
+        "drop_columns": "Удаление колонок",
+        "fill_na": "Заполнение пропусков",
+        "normalize": "Нормализация",
+        "scale": "Масштабирование",
+        "encode_categorical": "Кодирование категориальных данных",
+        "one_hot_encode": "One-Hot кодирование",
+        # Добавьте другие методы по мере необходимости
+    }
+    
+    return method_names.get(method_id, method_id)
+
+def apply_preprocessing(df: pd.DataFrame, config: Dict[str, Any], progress_callback=None) -> pd.DataFrame:
     """
     Применяет шаги предобработки к DataFrame на основе конфигурации.
     
@@ -86,14 +110,44 @@ def apply_preprocessing(df: pd.DataFrame, config: dict, progress_callback=None) 
         progress_callback: Функция обратного вызова для отслеживания прогресса
                           Принимает индекс метода и его название
     """
-    # Здесь должна быть реализация применения шагов предобработки
+    # Создаем копию исходного DataFrame
+    processed_df = df.copy()
+    
+    # Итерируем по методам обработки
     if "methods" in config:
         for idx, method in enumerate(config["methods"]):
-            # Если предоставлена функция обратного вызова, вызываем ее
+            method_id = method.get("method_id")
+            parameters = method.get("parameters", {})
+            
+            # Вызываем callback для отслеживания прогресса
             if progress_callback:
-                method_name = method.get("name", f"method_{idx}")
+                method_name = getMethodName(method_id)
                 progress_callback(idx, method_name)
             
-            # Здесь должна быть реализация применения конкретного метода
+            # Применяем конкретный метод обработки в зависимости от его ID
+            if method_id == "drop_columns":
+                # Удаление колонок
+                columns_to_drop = parameters.get("columns", [])
+                processed_df = processed_df.drop(columns=columns_to_drop, errors='ignore')
+                
+            elif method_id == "fill_na":
+                # Заполнение пропусков
+                columns = parameters.get("columns", processed_df.columns.tolist())
+                fill_value = parameters.get("value")
+                strategy = parameters.get("strategy", "value")
+                
+                for column in columns:
+                    if column in processed_df.columns:
+                        if strategy == "value" and fill_value is not None:
+                            processed_df[column] = processed_df[column].fillna(fill_value)
+                        elif strategy == "mean":
+                            processed_df[column] = processed_df[column].fillna(processed_df[column].mean())
+                        elif strategy == "median":
+                            processed_df[column] = processed_df[column].fillna(processed_df[column].median())
+                        elif strategy == "mode":
+                            processed_df[column] = processed_df[column].fillna(processed_df[column].mode()[0])
             
-    return df
+            # Здесь можно добавить другие методы обработки
+            # ...
+            
+    return processed_df

@@ -91,7 +91,10 @@ async def export_dataset(result_id: str, format: str = "csv"):
             if format.lower() == "excel":
                 # Создаем временный файл Excel
                 excel_path = TEMP_DIR / f"{result_id}.xlsx"
-                df.to_excel(excel_path, index=False, engine='openpyxl')
+                
+                # Используем openpyxl явно с полной настройкой параметров Unicode
+                with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                    df.to_excel(writer, index=False, sheet_name='Результаты')
                 
                 return FileResponse(
                     excel_path, 
@@ -99,12 +102,18 @@ async def export_dataset(result_id: str, format: str = "csv"):
                     media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             else:  # По умолчанию CSV
+                # Сохраняем с BOM (Byte Order Mark) для распознавания кодировки Excel
+                csv_path = TEMP_DIR / f"{result_id}.csv"
+                df.to_csv(csv_path, index=False, encoding='utf-8-sig')
+                
                 return FileResponse(
-                    result_path, 
+                    csv_path, 
                     filename=f"processed_data_{result_id}.csv",
                     media_type="text/csv",
-                    headers={"Content-Disposition": f'attachment; filename="processed_data_{result_id}.csv"',
-                             "Content-Type": "text/csv; charset=utf-8"}
+                    headers={
+                        "Content-Disposition": f'attachment; filename="processed_data_{result_id}.csv"',
+                        "Content-Type": "text/csv; charset=utf-8"
+                    }
                 )
         
         except HTTPException:
