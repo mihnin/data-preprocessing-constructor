@@ -594,7 +594,26 @@ export default defineComponent({
         }));
       }
       
-      return []; // Исправленная строка
+      // Добавляем логику для параметра columns
+      if (paramName === 'columns') {
+        // Для метода date_components нужно отфильтровать столбцы типа datetime
+        if (currentMethod.value && currentMethod.value.method_id === 'date_components') {
+          return datasetInfo.value.columns
+            .filter(col => col.type === 'datetime')
+            .map(col => ({
+              value: col.name,
+              label: col.name
+            }));
+        }
+        
+        // Для других методов возвращаем все столбцы
+        return datasetInfo.value.columns.map(col => ({
+          value: col.name,
+          label: col.name
+        }));
+      }
+      
+      return [];
     };
 
     const getParametersSummary = (method) => {

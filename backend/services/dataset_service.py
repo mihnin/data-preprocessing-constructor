@@ -24,8 +24,10 @@ def analyze_dataset(df: pd.DataFrame) -> Dict[str, Any]:
         # Пытаемся автоматически определить даты, если они не распознаны как даты
         if not is_datetime and not is_numeric:
             try:
-                pd.to_datetime(col_data, errors='raise')
+                converted_dates = pd.to_datetime(col_data, errors='raise')
                 is_datetime = True
+                # Обновляем DataFrame с конвертированными значениями дат
+                df[col] = converted_dates
             except:
                 pass
         
