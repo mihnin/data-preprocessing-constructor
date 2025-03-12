@@ -51,7 +51,7 @@ class NumpyJSONEncoder(json.JSONEncoder):
         if isinstance(obj, (np.integer, np.int64)):
             return int(obj)
         elif isinstance(obj, (np.floating, np.float64)):
-            if np.isnan(obj) or np.isinf(obj):
+            if np.isnan(obj) или np.isinf(obj):
                 return None
             return float(obj)
         elif isinstance(obj, np.ndarray):
@@ -133,9 +133,7 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     # Директории для хранения данных
-    UPLOAD_DIR = Path("./data/uploads")
-    PROCESSED_DIR = Path("./data/processed")
-    TEMP_DIR = Path("./data/temp")
+    from config.settings import UPLOAD_DIR, PROCESSED_DIR, TEMP_DIR
     
     # Создаем директории, если они не существуют
     for directory in [UPLOAD_DIR, PROCESSED_DIR, TEMP_DIR]:
