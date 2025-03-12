@@ -102,7 +102,22 @@
         
         <el-table :data="analysisResult.columns" style="width: 100%; margin-top: 20px;">
           <el-table-column prop="name" label="Название столбца" width="180"></el-table-column>
-          <el-table-column prop="type" label="Тип данных" width="120"></el-table-column>
+          
+          <!-- Обновленная колонка для типа данных с возможностью изменения -->
+          <el-table-column label="Тип данных" width="180">
+            <template #default="scope">
+              <el-select 
+                v-model="scope.row.type" 
+                size="small" 
+                @change="updateColumnType(scope.row)"
+              >
+                <el-option label="Числовой" value="numeric"></el-option>
+                <el-option label="Категориальный" value="categorical"></el-option>
+                <el-option label="Дата/время" value="datetime"></el-option>
+              </el-select>
+            </template>
+          </el-table-column>
+          
           <el-table-column prop="missing_count" label="Пропуски" width="100"></el-table-column>
           <el-table-column prop="unique_count" label="Уникальные" width="100"></el-table-column>
           <el-table-column label="Статистика">
@@ -323,12 +338,62 @@ export default defineComponent({
         'pca': 'Снижение размерности (PCA)',
         'time_series_analysis': 'Анализ временных рядов',
         'lagging': 'Лагирование переменных',
-        'rolling_statistics': 'Скользящие статистики'
+        'rolling_statistics': 'Скользящие статистики',
+        'date_components': 'Выделение компонентов даты/времени'
       };
       
       return methodNames[methodId] || methodId;
     };
+
+    // Вспомогательная функция для получения понятного названия типа
+    const getColumnTypeLabel = (type) => {
+      const typeLabels = {
+        'numeric': 'Числовой',
+        'categorical': 'Категориальный',
+        'datetime': 'Дата/время'
+      };
+      return typeLabels[type] || type;
+    };
     
+    // Функция для обновления типа столбца - обновлённая версия
+    const updateColumnType = async (column) => {
+      if (!analysisResult.value?.dataset_id) return;
+      
+      try {
+        // Если тип изменен на datetime, отмечаем как потенциальный временной ряд
+        if (column.type === "datetime") {
+          column.is_time_series = true;
+          
+          // Добавляем рекомендацию на методы для работы с временными рядами и датами
+          if (!analysisResult.value.recommended_methods.includes('date_components')) {
+            analysisResult.value.recommended_methods.push('date_components');
+          }
+          
+          if (!analysisResult.value.recommended_methods.includes('time_series_analysis')) {
+            analysisResult.value.recommended_methods.push('time_series_analysis');
+          }
+        } else {
+          // Если тип изменен с datetime на другой, убираем флаг временного ряда
+          column.is_time_series = false;
+        }
+        
+        // Обновляем локальные метаданные
+        const updatedAnalysis = {...analysisResult.value};
+        
+        // Сохраняем обновленные данные в хранилище
+        store.commit('setDatasetInfo', updatedAnalysis);
+
+        ElMessage({
+          message: `Тип столбца "${column.name}" изменен на ${getColumnTypeLabel(column.type)}`,
+          type: 'success'
+        });
+        
+      } catch (error) {
+        console.error('Ошибка обновления типа столбца:', error);
+        ElMessage.error('Не удалось обновить тип столбца');
+      }
+    };
+
     // Состояние выбора целевой переменной
     const selectedTargetColumn = ref(null);
     const settingTarget = ref(false);
@@ -393,6 +458,8 @@ export default defineComponent({
       proceedToPreprocessing,
       progressFormat,
       getMethodName,
+      getColumnTypeLabel,
+      updateColumnType,
       selectedTargetColumn,
       settingTarget,
       targetSetSuccess,

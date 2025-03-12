@@ -348,7 +348,7 @@ export default defineComponent({
     // Методы для категорий
     const generalMethods = computed(() => 
       methods.value.filter(method => 
-        !['lagging', 'rolling_statistics', 'time_series_analysis'].includes(method.method_id)
+        !['lagging', 'rolling_statistics', 'time_series_analysis', 'date_components'].includes(method.method_id)
       )
     );
     
