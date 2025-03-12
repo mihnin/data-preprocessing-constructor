@@ -97,6 +97,23 @@
           </el-tag>
         </el-card>
         
+        <!-- Добавляем компонент для управления метаданными масштабирования -->
+        <el-card v-if="hasScalingParams" class="metadata-card">
+          <template #header>
+            <div class="card-header">
+              <span>Управление параметрами масштабирования</span>
+            </div>
+          </template>
+          
+          <ScalingMetadataManager
+            :result-id="resultId"
+            :has-scaling-params="hasScalingParams"
+            :scaling-method-name="scalingMethodName"
+            :available-columns="resultMetadata.columns || []"
+            @metadata-updated="onMetadataUpdated"
+          />
+        </el-card>
+        
         <el-card class="data-preview">
           <template #header>
             <div class="card-header">
@@ -190,9 +207,13 @@ import { useStore } from 'vuex';
 import { ElMessage } from 'element-plus';
 import preprocessingService from '@/services/preprocessingService';
 import datasetService from '@/services/datasetService';
+import ScalingMetadataManager from '@/components/ScalingMetadataManager.vue';
 
 export default defineComponent({
   name: 'PreviewExportView',
+  components: {
+    ScalingMetadataManager
+  },
   
   setup() {
     const router = useRouter();
@@ -475,6 +496,68 @@ export default defineComponent({
       router.push('/');
     };
     
+    // Проверка наличия параметров масштабирования
+    const hasScalingParams = computed(() => {
+      if (!resultMetadata.value || !resultMetadata.value.config || !resultMetadata.value.config.methods) {
+        return false;
+      }
+      
+      return resultMetadata.value.config.methods.some(method => 
+        ['standardization', 'minmax_scaling', 'normalization'].includes(method.method_id)
+      );
+    });
+    
+    // Получение названия метода масштабирования
+    const scalingMethodName = computed(() => {
+      if (!resultMetadata.value || !resultMetadata.value.config || !resultMetadata.value.config.methods) {
+        return '';
+      }
+      
+      const scalingMethod = resultMetadata.value.config.methods.find(method => 
+        ['standardization', 'minmax_scaling', 'normalization'].includes(method.method_id)
+      );
+      
+      if (!scalingMethod) return '';
+      
+      const methodNames = {
+        'standardization': 'Стандартизация',
+        'minmax_scaling': 'Мин-макс нормализация',
+        'normalization': 'Нормализация'
+      };
+      
+      return methodNames[scalingMethod.method_id] || scalingMethod.method_id;
+    });
+    
+    // Обработчик события обновления метаданных
+    const onMetadataUpdated = (scalingParams) => {
+      // Обновляем локальное состояние
+      // Примечание: поскольку hasScalingParams является computed,
+      // мы не можем изменить его напрямую, но обновление данных
+      // приведет к пересчету этого свойства
+      
+      // Обновляем метаданные результата, добавляя информацию о масштабировании
+      if (resultMetadata.value && scalingParams) {
+        if (!resultMetadata.value.scaling_params) {
+          resultMetadata.value = {
+            ...resultMetadata.value,
+            scaling_params: scalingParams
+          };
+        } else {
+          resultMetadata.value.scaling_params = scalingParams;
+        }
+      }
+      
+      // Обновляем предпросмотр данных, если он загружен
+      if (previewData.value) {
+        loadDataPreview();
+      }
+      
+      ElMessage({
+        message: 'Параметры масштабирования обновлены',
+        type: 'success'
+      });
+    };
+    
     return {
       resultId,
       processingStatus,
@@ -497,7 +580,10 @@ export default defineComponent({
       formatParameterName,
       formatParameterValue,
       goToPreprocessing,
-      finishProcess
+      finishProcess,
+      hasScalingParams,
+      scalingMethodName,
+      onMetadataUpdated
     };
   }
 });
@@ -513,28 +599,32 @@ export default defineComponent({
 .processing-card, .error-card {
   margin-top: 20px;
   text-align: center;
-  padding: 40px;
+}
+
+.metadata-card {
+  margin-bottom: 20px;
 }
 
 .processing-indicator, .error-message {
+  padding: 40px;
+}
+
+.result-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 20px;
 }
 
-.result-container {
-  margin-top: 20px;
-}
-
 .result-summary, .data-preview, .export-card {
-  margin-bottom: 20px;
+  margin-top: 20px;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 20px;
 }
 
 .column-tag {
@@ -561,8 +651,8 @@ export default defineComponent({
 
 .export-options {
   margin-top: 20px;
-  padding: 15px;
-  background-color: #f5f7fa;
-  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
 }
+
 </style>
