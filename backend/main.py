@@ -1,7 +1,13 @@
+import sys
+import os
+from pathlib import Path
+
+# Add the parent directory to sys.path to enable absolute imports
+sys.path.insert(0, str(Path(__file__).parent))
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pathlib import Path
 import logging
 
 # Настройка логирования
