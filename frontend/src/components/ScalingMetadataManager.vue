@@ -471,9 +471,10 @@ export default {
         return;
       }
 
-      // Проверяем наличие параметров масштабирования
-      if (!props.scalingParams) {
-        ElMessage.error('Отсутствуют параметры масштабирования');
+      // Check if scaling parameters are available
+      if (!props.scalingParams || Object.keys(props.scalingParams).length === 0) {
+        ElMessage.error('Отсутствуют или некорректны параметры масштабирования');
+        console.error('Empty scaling parameters:', props.scalingParams);
         return;
       }
       
@@ -487,13 +488,16 @@ export default {
           scaling_params: props.scalingParams
         });
 
-        // Формируем правильную структуру для запроса
+        // Form the request with scaling parameters correctly structured
         const requestData = {
           columns: inverseScalingColumns.value,
           scaling_params: props.scalingParams
         };
         
-        // Выбираем нужный метод в зависимости от режима
+        // Log the request to help with debugging
+        console.log('Sending inverse scaling request:', JSON.stringify(requestData));
+        
+        // Choose the appropriate API endpoint based on mode
         let response;
         if (props.mode === 'dataset') {
           response = await preprocessingService.applyInverseScalingToDataset(
@@ -512,15 +516,22 @@ export default {
           type: 'success'
         });
         
-        // Оповещаем родительский компонент об успешном применении
+        // Notify parent component about successful application
         emit('inverse-scaling-applied', response.data);
         
-        // Очищаем выбранные столбцы
+        // Clear selected columns
         inverseScalingColumns.value = [];
       } catch (error) {
         console.error('Ошибка при применении обратного масштабирования:', error);
         console.log('Детали ошибки:', error.response?.data || error.message);
-        ElMessage.error(error.response?.data?.detail || 'Не удалось применить обратное масштабирование');
+        
+        // More detailed error message for troubleshooting
+        let errorMessage = 'Не удалось применить обратное масштабирование';
+        if (error.response?.data?.detail) {
+          errorMessage = error.response.data.detail;
+        }
+        
+        ElMessage.error(errorMessage);
       } finally {
         isApplying.value = false;
       }

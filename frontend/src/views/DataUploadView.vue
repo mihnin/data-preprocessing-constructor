@@ -541,6 +541,9 @@ export default defineComponent({
       scalingParams.value = params;
       hasScalingParams.value = true;
       
+      // Log the parameters to make sure they're structured correctly
+      console.log('Updated scaling parameters:', params);
+      
       // Определяем название метода масштабирования
       if (params.standardization && params.standardization.method) {
         const methodNames = {

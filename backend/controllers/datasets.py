@@ -273,6 +273,33 @@ async def apply_inverse_scaling_to_dataset(dataset_id: str, data: dict):
         logging.warning(f"Не указаны столбцы для обратного масштабирования: {data}")
         raise HTTPException(status_code=400, detail="Необходимо указать столбцы для масштабирования")
     
+    # Log the structure of scaling_params to help identify issues
+    logging.info(f"Structure of scaling_params: {scaling_params.keys() if isinstance(scaling_params, dict) else type(scaling_params)}")
+
+    # If scaling_params is empty or not properly structured, return a clearer error
+    if not scaling_params or not isinstance(scaling_params, dict) or len(scaling_params) == 0:
+        logging.warning(f"Empty or invalid scaling_params: {scaling_params}")
+        raise HTTPException(
+            status_code=400, 
+            detail="Параметры масштабирования отсутствуют или имеют неверный формат"
+        )
+
+    # Check for required keys based on expected structure patterns
+    valid_structure = False
+    if "standardization" in scaling_params:
+        valid_structure = True
+    elif "type" in scaling_params or "method" in scaling_params:
+        valid_structure = True
+    elif "mean" in scaling_params or "min" in scaling_params:
+        valid_structure = True
+
+    if not valid_structure:
+        logging.warning(f"Invalid scaling_params structure: {scaling_params}")
+        raise HTTPException(
+            status_code=400, 
+            detail="Параметры масштабирования имеют неверную структуру. Необходимы ключи standardization, type/method, или mean/min"
+        )
+    
     if not scaling_params:
         logging.warning(f"Не указаны параметры масштабирования: {data}")
         raise HTTPException(status_code=400, detail="Необходимо указать параметры масштабирования")
