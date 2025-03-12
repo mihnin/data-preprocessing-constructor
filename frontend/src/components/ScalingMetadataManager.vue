@@ -397,16 +397,17 @@ export default {
         const response = props.mode === 'dataset' 
           ? await preprocessingService.importMetadataForDataset(id, selectedFile.value)
           : await preprocessingService.importMetadata(id, selectedFile.value);
+        const scalingParams = response.data.scaling_params;
         
         ElMessage({
           message: 'Метаданные успешно импортированы',
           type: 'success'
         });
         
-        console.log("Import successful, scaling params:", response.data.scaling_params);
+        console.log("Import successful, scaling params:", scalingParams);
         
         // Оповещаем родительский компонент об обновлении метаданных
-        emit('metadata-updated', response.data.scaling_params);
+        emit('metadata-updated', scalingParams);
         fileList.value = [];
         selectedFile.value = null;
         
