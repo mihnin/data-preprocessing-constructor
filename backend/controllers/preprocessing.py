@@ -135,6 +135,10 @@ async def execute_preprocessing(
                     "config": config.dict()
                 }
                 
+                # Добавляем параметры масштабирования в метаданные, если они есть
+                if hasattr(processed_df, 'scaling_params'):
+                    metadata["scaling_params"] = processed_df.scaling_params
+                
                 metadata_path = result_path.parent / f"{result_id}_metadata.json"
                 with open(metadata_path, "w") as f:
                     json.dump(metadata, f, cls=NumpyEncoder)
@@ -444,7 +448,7 @@ async def set_scaling_params(result_id: str, params: dict):
                 
                 elif method == "minmax":
                     # Проверяем наличие min и max
-                    if "min" not in column_params or "max" not in column_params:
+                    if "min" not in column_params или "max" not in column_params:
                         raise HTTPException(
                             status_code=400, 
                             detail=f"Для столбца {column} необходимо указать min и max"

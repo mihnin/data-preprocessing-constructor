@@ -61,6 +61,10 @@ async def process_data(dataset_id: str, result_id: str, config, file_path: Path,
             "config": config.dict()
         }
         
+        # Добавляем параметры масштабирования, если они есть
+        if hasattr(processed_df, 'scaling_params'):
+            metadata["scaling_params"] = processed_df.scaling_params
+            
         metadata_path = result_path.parent / f"{result_id}_metadata.json"
         with open(metadata_path, "w", encoding="utf-8") as f:
             json.dump(metadata, f, cls=NumpyEncoder, ensure_ascii=False)

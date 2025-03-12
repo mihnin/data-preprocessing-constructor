@@ -242,21 +242,55 @@ def apply_preprocessing(df: pd.DataFrame, config: Dict[str, Any],
             if not columns:
                 # Пропускаем, если нет числовых столбцов
                 continue
-                
-            if strategy == "standard":
-                scaler = StandardScaler()
-            elif strategy == "minmax":
-                scaler = MinMaxScaler()
-            else:
-                continue
+            
+            # Создаем словарь для хранения параметров масштабирования
+            scaling_params = {
+                "method": strategy,
+                "columns": columns,
+                "params": {}
+            }
             
             # Проверяем наличие столбцов в DataFrame
             valid_columns = [col for col in columns if col in processed_df.columns]
             if not valid_columns:
                 continue
+                    
+            if strategy == "standard":
+                # Для каждого столбца сохраняем параметры масштабирования
+                for col in valid_columns:
+                    mean_val = float(processed_df[col].mean())
+                    std_val = float(processed_df[col].std()) if float(processed_df[col].std()) != 0 else 1.0
+                    
+                    scaling_params["params"][col] = {
+                        "mean": mean_val,
+                        "std": std_val
+                    }
+                
+                scaler = StandardScaler()
+            
+            elif strategy == "minmax":
+                # Для каждого столбца сохраняем параметры масштабирования
+                for col in valid_columns:
+                    min_val = float(processed_df[col].min())
+                    max_val = float(processed_df[col].max())
+                    
+                    scaling_params["params"][col] = {
+                        "min": min_val,
+                        "max": max_val
+                    }
+                
+                scaler = MinMaxScaler()
+            else:
+                continue
             
             # Применяем стандартизацию
             processed_df[valid_columns] = scaler.fit_transform(processed_df[valid_columns])
+            
+            # Добавляем параметры масштабирования к DataFrame в виде атрибута
+            if not hasattr(processed_df, 'scaling_params'):
+                processed_df.scaling_params = {}
+            
+            processed_df.scaling_params["standardization"] = scaling_params
         
         elif method_id == "categorical_encoding":
             strategy = parameters.get("strategy", "onehot")
