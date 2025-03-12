@@ -10,7 +10,7 @@ import json
 import logging
 from pathlib import Path
 from services.dataset_service import analyze_dataset
-from ..utils.file_utils import save_uploaded_file, get_file_path_by_id
+from utils.file_utils import save_uploaded_file, get_file_path_by_id  # Абсолютный импорт вместо относительного
 
 router = APIRouter()
 

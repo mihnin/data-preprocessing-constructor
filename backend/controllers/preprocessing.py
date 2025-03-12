@@ -8,7 +8,7 @@ import logging
 import uuid
 from pathlib import Path
 from ..services.preprocessing_service import get_preprocessing_methods, apply_preprocessing
-from ..utils.file_utils import get_file_path_by_id, get_processed_file_path
+from utils.file_utils import get_file_path_by_id, get_processed_file_path
 
 router = APIRouter()
 
