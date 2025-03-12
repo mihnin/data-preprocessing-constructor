@@ -1,5 +1,6 @@
 import logging
 import traceback
+import functools
 from fastapi import HTTPException
 from typing import Any, Callable, TypeVar, cast
 
@@ -16,6 +17,7 @@ def handle_exceptions(func: Callable[..., T]) -> Callable[..., T]:
     Returns:
         Callable: Функция-обертка
     """
+    @functools.wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> T:
         try:
             return await func(*args, **kwargs)
