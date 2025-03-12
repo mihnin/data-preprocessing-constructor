@@ -149,6 +149,24 @@ def get_preprocessing_methods() -> List[Dict[str, Any]]:
                     "description": "Статистики для расчета"
                 }
             }
+        },
+        {
+            "method_id": "date_components",
+            "name": "Извлечение компонентов даты",
+            "description": "Извлечение года, месяца, квартала, дня недели из столбцов с датами",
+            "applicable_types": ["datetime"],
+            "parameters": {
+                "columns": {
+                    "type": "multiselect",
+                    "description": "Столбцы с датами для обработки"
+                },
+                "components": {
+                    "type": "multiselect",
+                    "options": ["year", "month", "quarter", "day_of_week", "day_of_month", "day_of_year", "week_of_year"],
+                    "default": ["year", "month", "quarter", "day_of_week"],
+                    "description": "Компоненты даты для извлечения"
+                }
+            }
         }
     ]
     
@@ -318,6 +336,53 @@ def apply_preprocessing(df: pd.DataFrame, config: Dict[str, Any],
                         processed_df[f'{target_column}_rolling_min_{window_size}'] = processed_df[target_column].rolling(window=window_size).min()
                     elif stat == "max":
                         processed_df[f'{target_column}_rolling_max_{window_size}'] = processed_df[target_column].rolling(window=window_size).max()
+        
+        elif method_id == "date_components":
+            columns = parameters.get("columns", [])
+            components = parameters.get("components", ["year", "month", "quarter", "day_of_week"])
+            
+            # Если столбцы не указаны, ищем столбцы с датами
+            if not columns:
+                # Пытаемся обнаружить столбцы с датами
+                datetime_columns = []
+                for col in processed_df.columns:
+                    if pd.api.types.is_datetime64_dtype(processed_df[col]):
+                        datetime_columns.append(col)
+                    else:
+                        # Пробуем конвертировать в дату
+                        try:
+                            pd.to_datetime(processed_df[col], errors='raise')
+                            datetime_columns.append(col)
+                        except:
+                            pass
+                columns = datetime_columns
+            
+            for col in columns:
+                if col in processed_df.columns:
+                    # Конвертируем в datetime, если еще не datetime
+                    if not pd.api.types.is_datetime64_dtype(processed_df[col]):
+                        try:
+                            processed_df[col] = pd.to_datetime(processed_df[col])
+                        except Exception as e:
+                            logging.warning(f"Не удалось преобразовать столбец {col} в дату: {str(e)}")
+                            continue
+                    
+                    # Извлекаем компоненты даты
+                    for component in components:
+                        if component == "year":
+                            processed_df[f'{col}_year'] = processed_df[col].dt.year
+                        elif component == "month":
+                            processed_df[f'{col}_month'] = processed_df[col].dt.month
+                        elif component == "quarter":
+                            processed_df[f'{col}_quarter'] = processed_df[col].dt.quarter
+                        elif component == "day_of_week":
+                            processed_df[f'{col}_day_of_week'] = processed_df[col].dt.dayofweek + 1  # +1 для 1-7 вместо 0-6
+                        elif component == "day_of_month":
+                            processed_df[f'{col}_day_of_month'] = processed_df[col].dt.day
+                        elif component == "day_of_year":
+                            processed_df[f'{col}_day_of_year'] = processed_df[col].dt.dayofyear
+                        elif component == "week_of_year":
+                            processed_df[f'{col}_week_of_year'] = processed_df[col].dt.isocalendar().week
     
     return processed_df
 
@@ -331,6 +396,7 @@ def getMethodName(method_id):
         'pca': 'Снижение размерности (PCA)',
         'time_series_analysis': 'Анализ временных рядов',
         'lagging': 'Лагирование переменных',
-        'rolling_statistics': 'Скользящие статистики'
+        'rolling_statistics': 'Скользящие статистики',
+        'date_components': 'Извлечение компонентов даты'
     }
     return method_names.get(method_id, method_id)

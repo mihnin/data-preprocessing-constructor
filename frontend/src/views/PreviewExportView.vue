@@ -381,7 +381,8 @@ export default defineComponent({
         'pca': 'Снижение размерности (PCA)',
         'time_series_analysis': 'Анализ временных рядов',
         'lagging': 'Лагирование переменных',
-        'rolling_statistics': 'Скользящие статистики'
+        'rolling_statistics': 'Скользящие статистики',
+        'date_components': 'Извлечение компонентов даты'
       };
       
       return methodNames[methodId] || methodId;
@@ -398,7 +399,8 @@ export default defineComponent({
         'exog_columns': 'Экзогенные переменные',
         'window_size': 'Размер окна',
         'statistics': 'Статистики',
-        'n_components': 'Количество компонент'
+        'n_components': 'Количество компонент',
+        'components': 'Компоненты даты'
       };
       
       return paramNames[paramName] || paramName;
@@ -420,6 +422,24 @@ export default defineComponent({
           'label': 'Label кодирование'
         };
         return strategyLabels[value] || value;
+      }
+      
+      // Добавляем форматирование для компонентов даты
+      if (paramName === 'components') {
+        if (Array.isArray(value)) {
+          // Преобразуем идентификаторы компонентов в удобочитаемые названия
+          const componentLabels = {
+            'year': 'Год',
+            'month': 'Месяц',
+            'quarter': 'Квартал',
+            'day_of_week': 'День недели',
+            'day_of_month': 'День месяца',
+            'day_of_year': 'День года',
+            'week_of_year': 'Неделя года'
+          };
+          
+          return value.map(component => componentLabels[component] || component).join(', ');
+        }
       }
       
       if (Array.isArray(value)) {

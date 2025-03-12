@@ -354,7 +354,7 @@ export default defineComponent({
     
     const timeSeriesMethods = computed(() => 
       methods.value.filter(method => 
-        ['lagging', 'rolling_statistics', 'time_series_analysis'].includes(method.method_id)
+        ['lagging', 'rolling_statistics', 'time_series_analysis', 'date_components'].includes(method.method_id)
       )
     );
     
@@ -507,6 +507,22 @@ export default defineComponent({
       return str.charAt(0).toUpperCase() + str.slice(1);
     };
     
+    const getMethodName = (methodId) => {
+      const methodNames = {
+        'missing_values': 'Обработка пропущенных значений',
+        'outliers': 'Обработка выбросов',
+        'standardization': 'Стандартизация данных',
+        'categorical_encoding': 'Кодирование категориальных переменных',
+        'pca': 'Снижение размерности (PCA)',
+        'time_series_analysis': 'Анализ временных рядов',
+        'lagging': 'Лагирование переменных',
+        'rolling_statistics': 'Скользящие статистики',
+        'date_components': 'Извлечение компонентов даты'
+      };
+      
+      return methodNames[methodId] || methodId;
+    };
+
     const formatOptionLabel = (option, paramName) => {
       // Форматирование отображаемых названий опций
       if (paramName === 'strategy') {
@@ -526,7 +542,49 @@ export default defineComponent({
       }
       return option;
     };
-    
+
+    const formatParameterValue = (paramName, value) => {
+      if (paramName === 'strategy') {
+        const strategyLabels = {
+          'mean': 'Заполнить средним',
+          'median': 'Заполнить медианой',
+          'mode': 'Заполнить модой',
+          'drop_rows': 'Удалить строки',
+          'zscore': 'Z-оценка',
+          'iqr': 'Межквартильный размах',
+          'standard': 'Стандартизация',
+          'minmax': 'Мин-макс нормализация',
+          'onehot': 'One-Hot кодирование',
+          'label': 'Label кодирование'
+        };
+        return strategyLabels[value] || value;
+      }
+      
+      // Добавляем форматирование для компонентов даты
+      if (paramName === 'components') {
+        if (Array.isArray(value)) {
+          // Преобразуем идентификаторы компонентов в удобочитаемые названия
+          const componentLabels = {
+            'year': 'Год',
+            'month': 'Месяц',
+            'quarter': 'Квартал',
+            'day_of_week': 'День недели',
+            'day_of_month': 'День месяца',
+            'day_of_year': 'День года',
+            'week_of_year': 'Неделя года'
+          };
+          
+          return value.map(component => componentLabels[component] || component).join(', ');
+        }
+      }
+      
+      if (Array.isArray(value)) {
+        return value.length > 0 ? value.join(', ') : 'Не выбрано';
+      }
+      
+      return value === null || value === undefined ? 'Не указано' : value;
+    };
+
     const getOptionsForParam = (param, paramName) => {
       if (param.options) {
         return param.options.map(option => ({
@@ -556,165 +614,172 @@ export default defineComponent({
           label: `${col.name} (${col.type})${col.is_target ? ' - целевая' : ''}`
         }));
       }
-      
-      return [];
-    };
-    
+      ,
+      return [];getMethodName,
+    };   formatParameterValue
+     };
     const getParametersSummary = (method) => {
-      const config = methodConfigs[method.method_id];
+      const config = methodConfigs[method.method_id];});
       if (!config) return '';
       
       // Получаем краткую информацию о настройках
-      const summaryParts = [];
-      
-      // Добавляем информацию о стратегии, если есть
-      if (config.strategy) {
-        summaryParts.push(`Метод: ${formatOptionLabel(config.strategy, 'strategy')}`);
+      const summaryParts = [];ew {
+      0px;
+      // Добавляем информацию о стратегии, если есть margin: 0 auto;
+      if (config.strategy) {  padding: 20px;
+        summaryParts.push(`Метод: ${formatParameterValue('strategy', config.strategy)}`);
       }
-      
-      // Добавляем информацию о выбранных столбцах
+      preprocessing-container {
+      // Добавляем информацию о выбранных столбцах  margin-top: 20px;
       if (config.columns && config.columns.length) {
         summaryParts.push(`Столбцов: ${config.columns.length}`);
-      }
+      }method-list {
+        margin-bottom: 20px;
+      // Добавляем информацию о компонентах даты, если есть
+      if (config.components && config.components.length) {
+        summaryParts.push(`Компоненты: ${formatParameterValue('components', config.components)}`);method-item {
+      }  padding: 10px 0;
       
       return summaryParts.join(', ') || 'Настройки по умолчанию';
     };
     
-    // Проверка, является ли столбец новым
-    const isNewColumn = (column) => {
-      return !previewData.value.original_columns.includes(column);
+    // Проверка, является ли столбец новымce-between;
+    const isNewColumn = (column) => { align-items: center;
+      return !previewData.value.original_columns.includes(column);  margin-bottom: 10px;
     };
     
     return {
-      datasetId,
-      methods,
+      datasetId, font-weight: bold;
+      methods,  font-size: 16px;
       activeTab,
       selectedMethods,
-      methodConfigs,
-      generalMethods,
-      timeSeriesMethods,
+      methodConfigs,{
+      generalMethods, color: #606266;
+      timeSeriesMethods,  margin-left: 24px;
       selectedMethodsList,
       hasSelectedMethods,
-      showConfigDialog,
-      currentMethod,
-      showPreviewDialog,
+      showConfigDialog,ary {
+      currentMethod, margin-top: 20px;
+      showPreviewDialog,  margin-bottom: 20px;
       isPreviewLoading,
       previewData,
       previewError,
       previewTab,
-      isProcessing,
-      handleMethodSelection,
+      isProcessing, justify-content: space-between;
+      handleMethodSelection,  align-items: center;
       configureMethod,
       saveMethodConfig,
       previewResults,
       processData,
-      goToUpload,
+      goToUpload, space-between;
       goBack,
-      capitalize,
-      formatOptionLabel,
+      capitalize, padding: 10px 0;
+      formatOptionLabel,  border-bottom: 1px solid #ebeef5;
       getOptionsForParam,
       getParametersSummary,
-      isNewColumn
-    };
+      isNewColumnselected-method:last-child {
+    };  border-bottom: none;
   }
 });
 </script>
 
-<style scoped>
-.preprocessing-view {
+<style scoped> justify-content: space-between;
+.preprocessing-view {  margin-top: 20px;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
-}
+  padding: 20px;method-info {
+}  margin-bottom: 20px;
 
 .preprocessing-container {
-  margin-top: 20px;
-}
+  margin-top: 20px;parameter-item {
+}  margin-bottom: 20px;
 
 .method-list {
   margin-bottom: 20px;
 }
 
-.method-item {
-  padding: 10px 0;
-}
+.method-item {enter;
+  padding: 10px 0; justify-content: center;
+}  padding: 50px;
 
 .method-header {
-  display: flex;
-  justify-content: space-between;
+  display: flex;preview-error {
+  justify-content: space-between;  padding: 20px;
   align-items: center;
   margin-bottom: 10px;
 }
-
-.method-name {
+ display: flex;
+.method-name {  justify-content: space-between;
   font-weight: bold;
   font-size: 16px;
-}
-
+}column-list {
+  width: 48%;
 .method-description {
   color: #606266;
-  margin-left: 24px;
-}
+  margin-left: 24px;column-tag {
+}: 5px;
 
-.selected-methods-summary {
-  margin-top: 20px;
-  margin-bottom: 20px;
-}
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
 
-.selected-method {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #ebeef5;
-}
 
-.selected-method:last-child {
-  border-bottom: none;
-}
 
-.navigation-buttons {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 20px;
-}
 
-.method-info {
-  margin-bottom: 20px;
-}
 
-.parameter-item {
-  margin-bottom: 20px;
-}
 
-.preview-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 50px;
-}
 
-.preview-error {
-  padding: 20px;
-}
 
-.columns-comparison {
-  display: flex;
-  justify-content: space-between;
-}
 
-.column-list {
-  width: 48%;
-}
 
-.column-tag {
-  margin: 5px;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</style>}  margin: 5px;.column-tag {}  width: 48%;.column-list {}  justify-content: space-between;  display: flex;.columns-comparison {}  padding: 20px;.preview-error {}  padding: 50px;  justify-content: center;  align-items: center;  flex-direction: column;  display: flex;.preview-loading {}  margin-bottom: 20px;.parameter-item {}  margin-bottom: 20px;.method-info {}  margin-top: 20px;  justify-content: space-between;  display: flex;.navigation-buttons {}  border-bottom: none;.selected-method:last-child {}  border-bottom: 1px solid #ebeef5;  padding: 10px 0;  align-items: center;  justify-content: space-between;  display: flex;.selected-method {}  align-items: center;  justify-content: space-between;  display: flex;.card-header {}  margin-bottom: 20px;  margin-top: 20px;.selected-methods-summary {}
 </style>
