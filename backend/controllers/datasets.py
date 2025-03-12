@@ -86,7 +86,8 @@ async def export_dataset(result_id: str):
     """
     Экспорт обработанных данных.
     """
-    from ..utils.file_utils import get_processed_file_path
+    # Заменяем относительный импорт на абсолютный
+    from utils.file_utils import get_processed_file_path
     
     try:
         # Получаем путь к файлу результатов
