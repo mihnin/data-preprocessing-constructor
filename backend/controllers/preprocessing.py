@@ -12,6 +12,7 @@ from services.preprocessing_service import get_preprocessing_methods, apply_prep
 from utils.file_utils import get_file_path_by_id, get_processed_file_path
 # В начало файла добавим импорт класса NumpyEncoder
 from controllers.datasets import NumpyEncoder
+from utils.json_utils import convert_numpy_types  # Добавляем импорт функции convert_numpy_types
 
 router = APIRouter()
 
@@ -26,7 +27,8 @@ async def get_methods():
     """
     try:
         methods = get_preprocessing_methods()
-        return methods
+        # Применяем convert_numpy_types к методам перед возвратом
+        return convert_numpy_types(methods)
     except Exception as e:
         logging.error(f"Ошибка получения методов предобработки: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка сервера: {str(e)}")
@@ -64,13 +66,15 @@ async def preview_preprocessing(config: PreprocessingConfig):
         # Применяем предобработку
         processed_df = apply_preprocessing(sample_df, config.dict())
         
-        # Возвращаем результаты
-        return {
+        # Возвращаем результаты и применяем convert_numpy_types
+        result = {
             "original_sample": sample_df.to_dict(orient="records"),
             "processed_sample": processed_df.to_dict(orient="records"),
             "original_columns": sample_df.columns.tolist(),
             "processed_columns": processed_df.columns.tolist()
         }
+        
+        return convert_numpy_types(result)
     
     except HTTPException:
         raise
@@ -140,7 +144,9 @@ async def execute_preprocessing(config: PreprocessingConfig, background_tasks: B
         # Запускаем обработку в фоновом режиме
         background_tasks.add_task(process_data)
         
-        return {"result_id": result_id, "status": "processing"}
+        # Применяем convert_numpy_types к результату перед возвратом
+        result = {"result_id": result_id, "status": "processing"}
+        return convert_numpy_types(result)
     
     except HTTPException:
         raise
@@ -160,13 +166,13 @@ async def get_preprocessing_status(result_id: str):
         if error_path.exists():
             with open(error_path, "r") as f:
                 error_message = f.read()
-            return {"status": "error", "message": error_message}
+            return convert_numpy_types({"status": "error", "message": error_message})
         
         if result_path.exists():
             metadata_path = result_path.parent / f"{result_id}_metadata.json"
             with open(metadata_path, "r") as f:
                 metadata = json.load(f)
-            return {"status": "completed", "metadata": metadata}
+            return convert_numpy_types({"status": "completed", "metadata": metadata})
         
         return {"status": "processing"}
     
@@ -188,7 +194,9 @@ async def get_data_preview(result_id: str, limit: int = 100):
         # Загружаем данные для предпросмотра
         df = pd.read_csv(result_path, nrows=limit)
         
-        return {"preview": df.to_dict(orient="records")}
+        # Применяем convert_numpy_types к результату перед возвратом
+        result = {"preview": df.to_dict(orient="records")}
+        return convert_numpy_types(result)
     
     except HTTPException:
         raise

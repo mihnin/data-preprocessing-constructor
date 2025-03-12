@@ -10,7 +10,8 @@ import json
 import logging
 from pathlib import Path
 from services.dataset_service import analyze_dataset
-from utils.file_utils import save_uploaded_file, get_file_path_by_id  # Абсолютный импорт вместо относительного
+from utils.file_utils import save_uploaded_file, get_file_path_by_id
+from utils.json_utils import convert_numpy_types  # Добавляем импорт новой функции
 
 router = APIRouter()
 
@@ -63,7 +64,8 @@ async def upload_dataset(file: UploadFile = File(...)):
         with open(metadata_path, "w") as f:
             json.dump(analysis, f, cls=NumpyEncoder)  # Используем NumpyEncoder
         
-        return analysis
+        # Применяем функцию convert_numpy_types к результату перед возвратом
+        return convert_numpy_types(analysis)
     
     except Exception as e:
         logging.error(f"Ошибка при загрузке файла: {str(e)}")
@@ -82,7 +84,8 @@ async def get_dataset_info(dataset_id: str):
             if metadata_path.exists():
                 with open(metadata_path, "r") as f:
                     metadata = json.load(f)
-                return metadata
+                # Применяем convert_numpy_types к метаданным перед возвратом
+                return convert_numpy_types(metadata)
         
         raise HTTPException(status_code=404, detail="Набор данных не найден")
     
