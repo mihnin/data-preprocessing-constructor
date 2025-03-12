@@ -584,8 +584,25 @@ export default defineComponent({
       isDirectProcessing.value = true;
       
       try {
-        // Получаем столбцы для масштабирования из параметров
-        const columns = scalingParams.value.standardization?.columns || [];
+        // Определим столбцы из параметров масштабирования
+        let columns = [];
+        
+        // Проверим разные возможные структуры scalingParams
+        if (scalingParams.value.standardization?.columns) {
+          columns = scalingParams.value.standardization.columns;
+        } else if (scalingParams.value.columns) {
+          columns = scalingParams.value.columns;
+        } else if (scalingParams.value.parameters) {
+          // Если есть параметры, возьмём их ключи как имена столбцов
+          columns = Object.keys(scalingParams.value.parameters);
+        }
+        
+        // Проверяем наличие столбцов перед отправкой запроса
+        if (columns.length === 0) {
+          ElMessage.error('Не удалось определить столбцы для обратного масштабирования');
+          isDirectProcessing.value = false;
+          return;
+        }
         
         const response = await preprocessingService.applyInverseScalingToDataset(
           analysisResult.value.dataset_id,
@@ -599,15 +616,15 @@ export default defineComponent({
         store.commit('setResultId', response.data.result_id);
         
         ElMessage({
-          message: 'Обратное масштабирование успешно выполнено',
+          message: 'Обратное масштабирование успешно применено',
           type: 'success'
         });
         
-        // Переходим к просмотру результатов
+        // Переходим к просмотру результата
         router.push('/preview');
       } catch (error) {
-        console.error('Ошибка при выполнении обратного масштабирования:', error);
-        ElMessage.error('Не удалось выполнить обратное масштабирование');
+        console.error('Ошибка обратного масштабирования:', error);
+        ElMessage.error(error.response?.data?.detail || 'Не удалось применить обратное масштабирование');
       } finally {
         isDirectProcessing.value = false;
       }
