@@ -379,24 +379,42 @@ export default {
     
     // Функция импорта метаданных
     const importMetadata = async () => {
-      if (!props.resultId || !selectedFile.value) return;
+      // Check if either resultId or datasetId is available based on mode
+      const id = props.mode === 'dataset' ? props.datasetId : props.resultId;
+      if (!id || !selectedFile.value) return;
       
       isImporting.value = true;
       
       try {
-        const response = await preprocessingService.importMetadata(props.resultId, selectedFile.value);
+        console.log("Importing metadata file:", selectedFile.value.name);
+        
+        // Create form data with the appropriate ID based on mode
+        const formData = new FormData();
+        formData.append('file', selectedFile.value);
+        formData.append(props.mode === 'dataset' ? 'dataset_id' : 'result_id', id);
+        
+        // Call the proper import endpoint based on mode
+        const response = props.mode === 'dataset' 
+          ? await preprocessingService.importMetadataForDataset(id, selectedFile.value)
+          : await preprocessingService.importMetadata(id, selectedFile.value);
         
         ElMessage({
           message: 'Метаданные успешно импортированы',
           type: 'success'
         });
         
+        console.log("Import successful, scaling params:", response.data.scaling_params);
+        
         // Оповещаем родительский компонент об обновлении метаданных
         emit('metadata-updated', response.data.scaling_params);
         fileList.value = [];
         selectedFile.value = null;
+        
+        // After successful import, activate the inverse scaling tab
+        activeTab.value = 'inverse';
       } catch (error) {
         console.error('Ошибка импорта метаданных:', error);
+        console.log("Error details:", error.response?.data || error.message);
         ElMessage.error(error.response?.data?.detail || 'Не удалось импортировать метаданные');
       } finally {
         isImporting.value = false;
@@ -450,13 +468,20 @@ export default {
     const applyInverseScaling = async () => {
       if (inverseScalingColumns.value.length === 0) return;
       
+      // Проверяем наличие параметров масштабирования
+      if (!props.scalingParams) {
+        ElMessage.error('Отсутствуют параметры масштабирования');
+        return;
+      }
+      
       isApplying.value = true;
       
       try {
         const response = await preprocessingService.applyInverseScaling({
           id: props.mode === 'dataset' ? props.datasetId : props.resultId,
           columns: inverseScalingColumns.value,
-          mode: props.mode
+          mode: props.mode,
+          scaling_params: props.scalingParams
         });
         
         ElMessage({

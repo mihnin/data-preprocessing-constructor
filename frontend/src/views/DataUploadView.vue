@@ -557,6 +557,17 @@ export default defineComponent({
       
       // Сохраняем параметры в хранилище
       store.commit('setScalingParams', params);
+      
+      // Make the inverse scaling button visible and highlighted
+      setTimeout(() => {
+        const button = document.querySelector('.direct-action-buttons .el-button');
+        if (button) {
+          button.classList.add('highlight-button');
+          setTimeout(() => {
+            button.classList.remove('highlight-button');
+          }, 3000);
+        }
+      }, 500);
     };
     
     // Обработчик применения обратного масштабирования
@@ -732,5 +743,21 @@ export default defineComponent({
   margin-top: 20px;
   display: flex;
   justify-content: center;
+}
+
+.highlight-button {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(64, 158, 255, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(64, 158, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(64, 158, 255, 0);
+  }
 }
 </style>

@@ -8,6 +8,7 @@ import uuid
 import shutil
 import json
 import logging
+import time  # Add time module import
 from pathlib import Path
 
 # Импорты из собственных модулей
@@ -319,3 +320,85 @@ async def apply_inverse_scaling_to_dataset(dataset_id: str, data: dict):
         })
     
     return await with_file_lock(dataset_id, process_inverse_scaling)
+
+@router.post("/{dataset_id}/import-metadata")
+@handle_exceptions
+async def import_metadata_for_dataset(
+    dataset_id: str,
+    file: UploadFile = File(...)
+):
+    """
+    Импорт метаданных масштабирования из файла для датасета.
+    """
+    # Проверяем, обрабатывается ли файл в данный момент
+    if is_file_processing(dataset_id):
+        return {"status": "processing", "message": "Файл в данный момент обрабатывается"}
+    
+    async def process_metadata_import():
+        try:
+            # Сохраняем загруженный файл метаданных во временную директорию
+            temp_dir = TEMP_DIR
+            temp_metadata_path = temp_dir / f"temp_metadata_{str(uuid.uuid4())}.json"
+            
+            with open(temp_metadata_path, "wb") as buffer:
+                content = await file.read()
+                buffer.write(content)
+            
+            # Загружаем метаданные из временного файла
+            with open(temp_metadata_path, "r", encoding="utf-8") as f:
+                imported_metadata = json.load(f)
+            
+            # Проверяем наличие параметров масштабирования
+            if "scaling_params" not in imported_metadata:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Файл не содержит параметров масштабирования"
+                )
+            
+            # Загружаем или создаем метаданные датасета
+            metadata_path = None
+            for ext in ["csv", "xlsx", "xls"]:
+                temp_path = get_file_path_by_id(dataset_id, ext)
+                if temp_path.exists():
+                    metadata_path = temp_path.parent / f"{dataset_id}_metadata.json"
+                    break
+            
+            if not metadata_path:
+                raise HTTPException(status_code=404, detail="Набор данных не найден")
+                
+            if metadata_path.exists():
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    existing_metadata = json.load(f)
+            else:
+                existing_metadata = {
+                    "dataset_id": dataset_id,
+                    "columns": []
+                }
+                
+            # Обновляем метаданные с импортированными параметрами масштабирования
+            existing_metadata["scaling_params"] = imported_metadata["scaling_params"]
+            existing_metadata["imported_metadata"] = True
+            existing_metadata["imported_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Сохраняем обновленные метаданные
+            with open(metadata_path, "w", encoding="utf-8") as f:
+                json.dump(existing_metadata, f, cls=NumpyEncoder, ensure_ascii=False)
+            
+            # Удаляем временный файл
+            os.remove(temp_metadata_path)
+            
+            return {
+                "status": "success",
+                "message": "Метаданные успешно импортированы",
+                "scaling_params": imported_metadata["scaling_params"]
+            }
+            
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Некорректный формат JSON файла")
+        except HTTPException:
+            raise
+        except Exception as e:
+            log_error(e, "Ошибка импорта метаданных")
+            raise HTTPException(status_code=500, detail=f"Ошибка сервера: {str(e)}")
+    
+    return await with_file_lock(dataset_id, process_metadata_import)

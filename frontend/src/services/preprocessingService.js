@@ -47,6 +47,19 @@ export default {
     });
   },
   
+  // Импорт метаданных масштабирования для датасета
+  importMetadataForDataset(datasetId, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('dataset_id', datasetId);
+    
+    return apiClient.post(`/datasets/${datasetId}/import-metadata`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+  
   // Установка параметров масштабирования вручную
   setScalingParams(resultId, params) {
     return apiClient.post(`/preprocessing/set-scaling-params/${resultId}`, params);
