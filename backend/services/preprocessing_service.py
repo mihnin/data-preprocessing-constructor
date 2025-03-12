@@ -482,7 +482,7 @@ def apply_inverse_scaling(df: pd.DataFrame, columns: List[str], scaling_params: 
     Args:
         df: Исходный DataFrame
         columns: Список столбцов для обратного масштабирования
-        scaling_params: Параметры масштабирования
+        scaling_params: Параметры масштабирования в различных форматах
     
     Returns:
         DataFrame с обратно масштабированными данными
@@ -490,16 +490,56 @@ def apply_inverse_scaling(df: pd.DataFrame, columns: List[str], scaling_params: 
     # Создаем копию DataFrame
     processed_df = df.copy()
     
-    # Получаем параметры стандартизации
-    standardization_params = scaling_params.get("standardization", {})
-    method_name = standardization_params.get("method")
-    params = standardization_params.get("params", {})
+    # Определяем формат параметров масштабирования и извлекаем нужные данные
+    method_name = None
+    params = {}
     
-    # Фильтруем столбцы, которые есть в датафрейме
+    # Формат 1: {standardization: {method, columns, params}}
+    if "standardization" in scaling_params:
+        standardization_params = scaling_params.get("standardization", {})
+        method_name = standardization_params.get("method")
+        params = standardization_params.get("params", {})
+    
+    # Формат 2: {method, columns, params/parameters}
+    elif "method" in scaling_params:
+        method_name = scaling_params.get("method")
+        # Проверяем оба возможных ключа для параметров
+        params = scaling_params.get("params", {}) or scaling_params.get("parameters", {})
+    
+    # Формат 3: {type, ...} (используется в datasets.py)
+    elif "type" in scaling_params:
+        method_name = scaling_params.get("type")
+        # В этом формате параметры могут быть в разных ключах в зависимости от типа масштабирования
+        if method_name == "standard":
+            # Собираем параметры для standard scaling
+            means = scaling_params.get("mean", {})
+            stds = scaling_params.get("std", {})
+            for col in columns:
+                if col in means and col in stds:
+                    params[col] = {"mean": means[col], "std": stds[col]}
+        elif method_name == "minmax":
+            # Собираем параметры для minmax scaling
+            mins = scaling_params.get("min", {})
+            maxs = scaling_params.get("max", {})
+            for col in columns:
+                if col in mins and col in maxs:
+                    params[col] = {"min": mins[col], "max": maxs[col]}
+    
+    # Если метод не определен, пробуем угадать по наличию параметров
+    if not method_name:
+        # Проверяем наличие параметров mean/std или min/max для первого столбца
+        if columns and columns[0] in params:
+            col_params = params[columns[0]]
+            if "mean" in col_params and "std" in col_params:
+                method_name = "standard"
+            elif "min" in col_params and "max" in col_params:
+                method_name = "minmax"
+    
+    # Фильтруем столбцы, которые есть в датафрейме и в параметрах
     valid_columns = [col for col in columns if col in processed_df.columns and col in params]
     
-    if not valid_columns:
-        # Если нет подходящих столбцов, возвращаем исходный DataFrame
+    if not valid_columns or not method_name:
+        # Если нет подходящих столбцов или метод не определен, возвращаем исходный DataFrame
         return processed_df
     
     # Применяем обратное масштабирование в зависимости от метода
