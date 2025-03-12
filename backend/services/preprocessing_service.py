@@ -154,15 +154,20 @@ def get_preprocessing_methods() -> List[Dict[str, Any]]:
     
     return methods
 
-def apply_preprocessing(df: pd.DataFrame, config: Dict[str, Any]) -> pd.DataFrame:
+def apply_preprocessing(df: pd.DataFrame, config: Dict[str, Any], 
+                        progress_callback=None) -> pd.DataFrame:
     """
     Применение методов предобработки к данным.
     """
     processed_df = df.copy()
     
-    for method in config["methods"]:
+    for method_idx, method in enumerate(config["methods"]):
         method_id = method["method_id"]
         parameters = method.get("parameters", {})
+        
+        # Вызов callback для обновления прогресса
+        if progress_callback:
+            progress_callback(method_idx, getMethodName(method_id))
         
         if method_id == "missing_values":
             strategy = parameters.get("strategy", "mean")
@@ -315,3 +320,17 @@ def apply_preprocessing(df: pd.DataFrame, config: Dict[str, Any]) -> pd.DataFram
                         processed_df[f'{target_column}_rolling_max_{window_size}'] = processed_df[target_column].rolling(window=window_size).max()
     
     return processed_df
+
+def getMethodName(method_id):
+    """Получение читаемого названия метода по его ID"""
+    method_names = {
+        'missing_values': 'Обработка пропущенных значений',
+        'outliers': 'Обработка выбросов',
+        'standardization': 'Стандартизация данных',
+        'categorical_encoding': 'Кодирование категориальных переменных',
+        'pca': 'Снижение размерности (PCA)',
+        'time_series_analysis': 'Анализ временных рядов',
+        'lagging': 'Лагирование переменных',
+        'rolling_statistics': 'Скользящие статистики'
+    }
+    return method_names.get(method_id, method_id)

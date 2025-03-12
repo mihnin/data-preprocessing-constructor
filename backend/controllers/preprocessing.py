@@ -160,6 +160,15 @@ async def get_preprocessing_status(result_id: str):
     """
     # Проверяем, обрабатывается ли файл в данный момент
     if is_file_processing(result_id):
+        # Проверяем наличие метаданных о прогрессе
+        progress_path = get_processed_file_path(result_id).parent / f"{result_id}_progress.json"
+        if progress_path.exists():
+            try:
+                with open(progress_path, "r") as f:
+                    progress_data = json.load(f)
+                return convert_numpy_types({"status": "processing", "progress": progress_data})
+            except:
+                pass
         return {"status": "processing"}
     
     async def check_status():

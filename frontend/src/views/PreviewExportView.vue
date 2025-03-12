@@ -21,11 +21,18 @@
       <!-- Индикатор прогресса обработки -->
       <el-card v-if="processingStatus === 'processing'" class="processing-card">
         <div class="processing-indicator">
-          <el-progress type="circle" :percentage="75" status="exception"></el-progress>
-          <h3>Выполняется обработка данных...</h3>
+          <el-progress 
+            type="circle" 
+            :percentage="processingProgress.percent || 0" 
+            :status="processingProgress.percent < 100 ? 'exception' : 'success'"
+          ></el-progress>
+          <h3>{{ getProcessingStageTitle(processingProgress.stage) }}</h3>
+          <p v-if="processingProgress.method_name">
+            Выполняется: {{ processingProgress.method_name }}
+          </p>
           <p>Это может занять некоторое время в зависимости от размера данных и выбранных методов.</p>
           <el-button type="primary" plain @click="checkStatus">
-            Проверить статус
+            Обновить статус
           </el-button>
         </div>
       </el-card>
@@ -177,7 +184,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, onMounted } from 'vue';
+import { defineComponent, ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { ElMessage } from 'element-plus';
@@ -197,6 +204,16 @@ export default defineComponent({
     const errorMessage = ref('');
     const resultMetadata = ref(null);
     
+    // Информация о прогрессе обработки
+    const processingProgress = ref({
+      percent: 0,
+      stage: 'preparing',
+      method_name: null
+    });
+    
+    // Добавляем переменную для хранения интервала
+    const statusInterval = ref(null);
+    
     // Состояние предпросмотра
     const isPreviewLoading = ref(false);
     const previewData = ref(null);
@@ -208,10 +225,26 @@ export default defineComponent({
     const csvDelimiter = ref(',');
     const isExporting = ref(false);
     
+    // Запуск периодического опроса статуса
+    const startStatusPolling = () => {
+      // Проверяем статус каждые 3 секунды
+      statusInterval.value = setInterval(() => {
+        checkStatus();
+      }, 3000);
+    };
+    
+    // Останавливаем опрос при размонтировании компонента
+    onUnmounted(() => {
+      if (statusInterval.value) {
+        clearInterval(statusInterval.value);
+      }
+    });
+    
     // Получение статуса обработки
     onMounted(() => {
       if (resultId.value) {
         checkStatus();
+        startStatusPolling(); // Запускаем автоматический опрос
       }
     });
     
@@ -225,9 +258,18 @@ export default defineComponent({
         if (response.data.status === 'error') {
           processingStatus.value = 'error';
           errorMessage.value = response.data.message;
+          // Останавливаем опрос при ошибке
+          if (statusInterval.value) {
+            clearInterval(statusInterval.value);
+          }
         } else if (response.data.status === 'completed') {
           processingStatus.value = 'completed';
           resultMetadata.value = response.data.metadata;
+          
+          // Останавливаем опрос при завершении
+          if (statusInterval.value) {
+            clearInterval(statusInterval.value);
+          }
           
           // Получение оригинальных столбцов из метаданных датасета
           try {
@@ -238,11 +280,19 @@ export default defineComponent({
           }
         } else {
           processingStatus.value = 'processing';
+          // Обновляем информацию о прогрессе, если она доступна
+          if (response.data.progress) {
+            processingProgress.value = response.data.progress;
+          }
         }
       } catch (error) {
         console.error('Ошибка проверки статуса:', error);
         processingStatus.value = 'error';
         errorMessage.value = 'Не удалось получить статус обработки';
+        // Останавливаем опрос при ошибке
+        if (statusInterval.value) {
+          clearInterval(statusInterval.value);
+        }
       }
     };
     
@@ -379,6 +429,21 @@ export default defineComponent({
       return value === null || value === undefined ? 'Не указано' : value;
     };
     
+    // Получение заголовка для текущего этапа обработки
+    const getProcessingStageTitle = (stage) => {
+      const stageTitles = {
+        'preparing': 'Подготовка к обработке...',
+        'loading': 'Загрузка данных...',
+        'preprocessing': 'Инициализация предобработки...',
+        'processing_method': 'Выполнение предобработки...',
+        'saving': 'Сохранение результатов...',
+        'completed': 'Обработка завершена',
+        'error': 'Ошибка при обработке'
+      };
+      
+      return stageTitles[stage] || 'Выполняется обработка данных...';
+    };
+    
     // Навигация
     const goToPreprocessing = () => {
       router.push('/preprocessing');
@@ -402,7 +467,9 @@ export default defineComponent({
       csvDelimiter,
       isExporting,
       appliedMethods,
+      processingProgress,
       checkStatus,
+      getProcessingStageTitle,
       loadDataPreview,
       exportData,
       isNewColumn,
