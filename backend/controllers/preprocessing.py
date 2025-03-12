@@ -448,7 +448,7 @@ async def set_scaling_params(result_id: str, params: dict):
                 
                 elif method == "minmax":
                     # Проверяем наличие min и max
-                    if "min" not in column_params или "max" not in column_params:
+                    if "min" not in column_params or "max" not in column_params:
                         raise HTTPException(
                             status_code=400, 
                             detail=f"Для столбца {column} необходимо указать min и max"
