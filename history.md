@@ -16,3 +16,8 @@
 ### Исправления
 - Исправлен файл preprocessing.py, заменен относительный импорт preprocessing_service на абсолютный
 - Исправлена функция export_dataset в файле datasets.py, заменен относительный импорт file_utils на абсолютный
+
+## [19.05.2024]
+### Исправления
+- Добавлен класс NumpyEncoder для корректной сериализации типов NumPy (np.int64, np.float64) в JSON
+- Исправлена ошибка "Object of type int64 is not JSON serializable" при анализе данных

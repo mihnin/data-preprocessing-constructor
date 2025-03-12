@@ -10,6 +10,8 @@ from pathlib import Path
 # Заменяем относительный импорт на абсолютный
 from services.preprocessing_service import get_preprocessing_methods, apply_preprocessing
 from utils.file_utils import get_file_path_by_id, get_processed_file_path
+# В начало файла добавим импорт класса NumpyEncoder
+from controllers.datasets import NumpyEncoder
 
 router = APIRouter()
 
@@ -126,7 +128,7 @@ async def execute_preprocessing(config: PreprocessingConfig, background_tasks: B
                 
                 metadata_path = result_path.parent / f"{result_id}_metadata.json"
                 with open(metadata_path, "w") as f:
-                    json.dump(metadata, f)
+                    json.dump(metadata, f, cls=NumpyEncoder)  # Используем NumpyEncoder
             
             except Exception as e:
                 logging.error(f"Ошибка при обработке: {str(e)}")

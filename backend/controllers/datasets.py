@@ -14,6 +14,17 @@ from utils.file_utils import save_uploaded_file, get_file_path_by_id  # Абсо
 
 router = APIRouter()
 
+# Добавляем класс для сериализации NumPy типов
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.int64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float64)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
 @router.post("/upload")
 async def upload_dataset(file: UploadFile = File(...)):
     """
@@ -50,7 +61,7 @@ async def upload_dataset(file: UploadFile = File(...)):
         # Сохраняем метаданные
         metadata_path = file_path.parent / f"{dataset_id}_metadata.json"
         with open(metadata_path, "w") as f:
-            json.dump(analysis, f)
+            json.dump(analysis, f, cls=NumpyEncoder)  # Используем NumpyEncoder
         
         return analysis
     
