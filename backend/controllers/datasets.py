@@ -305,7 +305,7 @@ async def apply_inverse_scaling_to_dataset(dataset_id: str, data: dict):
         raise HTTPException(status_code=400, detail="Необходимо указать параметры масштабирования")
     
     # Проверяем структуру scaling_params
-    if isinstance(scaling_params, dict) и не содержит ключей:
+    if isinstance(scaling_params, dict) and not scaling_params:
         logging.warning(f"Неверная структура параметров масштабирования: {scaling_params}")
         raise HTTPException(
             status_code=400, 

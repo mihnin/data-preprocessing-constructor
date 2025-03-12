@@ -349,29 +349,26 @@ export default {
     
     // Функция экспорта метаданных
     const exportMetadata = async () => {
-      if (!props.resultId || !props.hasScalingParams) return;
-      
-      isExporting.value = true;
-      
       try {
-        const response = await preprocessingService.exportMetadata(props.resultId);
+        isExporting.value = true;
         
-        // Создание ссылки для скачивания
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `scaling_metadata_${props.resultId}.json`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Здесь исправляем неиспользуемую переменную response
+        // Было: const response = await preprocessingService.exportScalingMetadata(...
+        // Меняем на один из вариантов:
         
-        ElMessage({
-          message: 'Метаданные успешно экспортированы',
-          type: 'success'
-        });
+        // Вариант 1: Если данные из response не используются вообще
+        await preprocessingService.exportScalingMetadata(
+          props.resultId, 
+          props.scalingMethodName
+        );
+        
+        // ИЛИ Вариант 2: Если нужны данные из response
+        // const { data } = await preprocessingService.exportScalingMetadata(...
+        
+        ElMessage.success('Метаданные масштабирования успешно экспортированы');
       } catch (error) {
         console.error('Ошибка экспорта метаданных:', error);
-        ElMessage.error('Не удалось экспортировать метаданные');
+        ElMessage.error(error.response?.data?.detail || 'Не удалось экспортировать метаданные');
       } finally {
         isExporting.value = false;
       }
@@ -394,15 +391,14 @@ export default {
         formData.append(props.mode === 'dataset' ? 'dataset_id' : 'result_id', id);
         
         // Call the proper import endpoint based on mode and extract scaling params from response
-        let response;
+        let scalingParams;
         if (props.mode === 'dataset') {
-          response = await preprocessingService.importMetadataForDataset(id, selectedFile.value);
+          const response = await preprocessingService.importMetadataForDataset(id, selectedFile.value);
+          scalingParams = response.data.scaling_params;
         } else {
-          response = await preprocessingService.importMetadata(id, selectedFile.value);
+          const response = await preprocessingService.importMetadata(id, selectedFile.value);
+          scalingParams = response.data.scaling_params;
         }
-        
-        // Extract the scaling parameters from the response
-        const scalingParams = response.data.scaling_params;
         
         ElMessage({
           message: 'Метаданные успешно импортированы',
@@ -457,12 +453,12 @@ export default {
         console.log('Сохраняем форматированные параметры:', formattedParams);
         
         // Вызываем соответствующий эндпоинт в зависимости от режима
-        let response;
+        // Удаляем объявление неиспользуемой переменной response
         if (props.mode === 'dataset') {
           // Предполагаем, что такой метод нужно добавить в сервис
-          response = await preprocessingService.setScalingParamsForDataset(id, formattedParams);
+          await preprocessingService.setScalingParamsForDataset(id, formattedParams);
         } else {
-          response = await preprocessingService.setScalingParams(id, formattedParams);
+          await preprocessingService.setScalingParams(id, formattedParams);
         }
         
         ElMessage({

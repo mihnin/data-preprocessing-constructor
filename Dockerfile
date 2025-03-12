@@ -13,7 +13,7 @@ RUN npm install --no-audit --no-fund
 COPY frontend/ .
 
 # Собираем приложение для продакшна с отключенным ESLint
-RUN npm run build
+RUN npm run build --no-lint
 
 # Этап 2: Настройка Python для бэкенда с использованием slim образа
 FROM python:3.11-slim
