@@ -110,6 +110,46 @@ async def get_dataset_info(dataset_id: str):
     
     return await with_file_lock(dataset_id, load_metadata)
 
+@router.post("/{dataset_id}/set-target")
+@handle_exceptions
+async def set_target_column(dataset_id: str, data: dict):
+    """
+    Установка целевой переменной для набора данных.
+    """
+    # Проверяем, обрабатывается ли файл в данный момент
+    if is_file_processing(dataset_id):
+        return {"status": "processing", "message": "Файл в данный момент обрабатывается"}
+    
+    target_column = data.get("target_column")
+    if not target_column:
+        raise HTTPException(status_code=400, detail="Целевая переменная не указана")
+    
+    async def update_metadata():
+        # Ищем метаданные
+        for extension in ["csv", "xlsx", "xls"]:
+            file_path = get_file_path_by_id(dataset_id, extension)
+            metadata_path = file_path.parent / f"{dataset_id}_metadata.json"
+            if metadata_path.exists():
+                with open(metadata_path, "r") as f:
+                    metadata = json.load(f)
+                
+                # Обновляем информацию о целевой переменной
+                metadata["target_column"] = target_column
+                
+                # Обновляем статус целевой переменной в колонках
+                for col in metadata["columns"]:
+                    col["is_target"] = col["name"] == target_column
+                
+                # Сохраняем обновленные метаданные
+                with open(metadata_path, "w") as f:
+                    json.dump(metadata, f, cls=NumpyEncoder)
+                
+                return convert_numpy_types(metadata)
+        
+        raise HTTPException(status_code=404, detail="Набор данных не найден")
+    
+    return await with_file_lock(dataset_id, update_metadata)
+
 @router.get("/export/{result_id}")
 @handle_exceptions
 async def export_dataset(result_id: str):
