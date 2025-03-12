@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pandas
+numpy
+scikit-learn
+statsmodels
+openpyxl
+xlrd
+python-multipart
+aiofiles
+pydantic
+python-dotenv
