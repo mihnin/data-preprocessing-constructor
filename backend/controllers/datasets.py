@@ -305,13 +305,7 @@ async def apply_inverse_scaling_to_dataset(dataset_id: str, data: dict):
         raise HTTPException(status_code=400, detail="Необходимо указать параметры масштабирования")
     
     # Проверяем структуру scaling_params
-    if isinstance(scaling_params, dict) and not any([
-        "standardization" in scaling_params,
-        "type" in scaling_params,
-        "method" in scaling_params,
-        "params" in scaling_params,
-        "parameters" in scaling_params
-    ]):
+    if isinstance(scaling_params, dict) и не содержит ключей:
         logging.warning(f"Неверная структура параметров масштабирования: {scaling_params}")
         raise HTTPException(
             status_code=400, 
@@ -452,3 +446,81 @@ async def import_metadata_for_dataset(
             raise HTTPException(status_code=500, detail=f"Ошибка сервера: {str(e)}")
     
     return await with_file_lock(dataset_id, process_metadata_import)
+
+@router.post("/{dataset_id}/set-scaling-params")
+@handle_exceptions
+async def set_scaling_params_for_dataset(dataset_id: str, data: dict):
+    """
+    Set scaling parameters manually for a dataset.
+    """
+    # Check if file is being processed
+    if is_file_processing(dataset_id):
+        return {"status": "processing", "message": "File is currently being processed"}
+    
+    # Log the received parameters for debugging
+    logging.info(f"Received scaling params: {json.dumps(data, default=str)}")
+    
+    # Validate the scaling parameters
+    scaling_params = data.get("scaling_params")
+    
+    if not scaling_params or not isinstance(scaling_params, dict):
+        logging.warning(f"Invalid scaling parameters: {scaling_params}")
+        raise HTTPException(
+            status_code=400,
+            detail="Scaling parameters are missing or have an invalid format"
+        )
+    
+    # Check for required keys based on expected structure patterns
+    valid_structure = False
+    if "standardization" in scaling_params:
+        valid_structure = True
+    elif "type" in scaling_params or "method" in scaling_params:
+        valid_structure = True
+    elif "mean" in scaling_params or "min" in scaling_params:
+        valid_structure = True
+        
+    if not valid_structure:
+        logging.warning(f"Invalid scaling_params structure: {scaling_params}")
+        raise HTTPException(
+            status_code=400,
+            detail="Scaling parameters have an invalid structure. Keys like standardization, type/method, or mean/min are required"
+        )
+    
+    async def update_metadata_with_scaling_params():
+        # Find the dataset metadata file
+        metadata_path = None
+        for ext in ["csv", "xlsx", "xls"]:
+            temp_path = get_file_path_by_id(dataset_id, ext)
+            if temp_path.exists():
+                metadata_path = temp_path.parent / f"{dataset_id}_metadata.json"
+                break
+        
+        if not metadata_path:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # Load existing metadata or create new one
+        if metadata_path.exists():
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+        else:
+            metadata = {
+                "dataset_id": dataset_id,
+                "columns": []
+            }
+        
+        # Update the metadata with the provided scaling parameters
+        metadata["scaling_params"] = scaling_params
+        metadata["manually_set"] = True
+        metadata["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Save the updated metadata
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, cls=NumpyEncoder, ensure_ascii=False)
+        
+        return {
+            "status": "success",
+            "message": "Scaling parameters successfully set",
+            "metadata": convert_numpy_types(metadata)
+        }
+    
+    return await with_file_lock(dataset_id, update_metadata_with_scaling_params)

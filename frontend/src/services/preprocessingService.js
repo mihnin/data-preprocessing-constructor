@@ -64,11 +64,20 @@ export default {
   setScalingParams(resultId, params) {
     return apiClient.post(`/preprocessing/set-scaling-params/${resultId}`, params);
   },
+  
+  // Add this method to handle dataset mode parameter setting
+  setScalingParamsForDataset(datasetId, params) {
+    return apiClient.post(`/datasets/${datasetId}/set-scaling-params`, params);
+  },
 
   // Метод для применения обратного масштабирования к датасету
   applyInverseScalingToDataset(datasetId, data) {
-    console.log('Отправка запроса на обратное масштабирование датасета:', datasetId, data);
-    return apiClient.post(`/datasets/${datasetId}/apply-inverse-scaling`, data);
+    console.log('Applying inverse scaling to dataset:', datasetId, JSON.stringify(data));
+    return apiClient.post(`/datasets/${datasetId}/apply-inverse-scaling`, data)
+      .catch(error => {
+        console.error('API Error:', error.response?.data || error.message);
+        throw error;
+      });
   },
   
   // Метод для применения обратного масштабирования к результату

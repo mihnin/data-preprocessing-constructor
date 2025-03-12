@@ -423,18 +423,41 @@ export default {
     
     // Функция сохранения ручного ввода параметров
     const saveManualParams = async () => {
-      if (!props.resultId || !canSaveManualParams.value) return;
+      // Определяем ID в зависимости от режима работы
+      const id = props.mode === 'dataset' ? props.datasetId : props.resultId;
+      
+      if (!id || !canSaveManualParams.value) {
+        ElMessage.warning('Необходим корректный ID для сохранения параметров');
+        return;
+      }
       
       isSaving.value = true;
       
       try {
-        const params = {
-          method: manualParams.method,
-          columns: manualParams.columns,
-          parameters: manualParams.parameters
+        // Форматируем параметры в структуру, ожидаемую бэкендом
+        const formattedParams = {
+          standardization: {
+            method: manualParams.method,
+            columns: manualParams.columns,
+            params: {}
+          }
         };
         
-        const response = await preprocessingService.setScalingParams(props.resultId, params);
+        // Преобразуем плоскую структуру параметров в вложенный формат
+        manualParams.columns.forEach(column => {
+          formattedParams.standardization.params[column] = manualParams.parameters[column];
+        });
+        
+        console.log('Сохраняем форматированные параметры:', formattedParams);
+        
+        // Вызываем соответствующий эндпоинт в зависимости от режима
+        let response;
+        if (props.mode === 'dataset') {
+          // Предполагаем, что такой метод нужно добавить в сервис
+          response = await preprocessingService.setScalingParamsForDataset(id, formattedParams);
+        } else {
+          response = await preprocessingService.setScalingParams(id, formattedParams);
+        }
         
         ElMessage({
           message: 'Параметры масштабирования успешно сохранены',
@@ -442,7 +465,7 @@ export default {
         });
         
         // Оповещаем родительский компонент об обновлении метаданных
-        emit('metadata-updated', response.data.scaling_params);
+        emit('metadata-updated', formattedParams);
       } catch (error) {
         console.error('Ошибка сохранения параметров:', error);
         ElMessage.error(error.response?.data?.detail || 'Не удалось сохранить параметры');
@@ -464,50 +487,29 @@ export default {
       return props.availableColumns;
     };
     
-    // Функция для применения обратного масштабирования
+    // Функция применения обратного масштабирования
     const applyInverseScaling = async () => {
-      if (inverseScalingColumns.value.length === 0) {
-        ElMessage.warning('Пожалуйста, выберите столбцы для обратного масштабирования');
-        return;
-      }
-
-      // Check if scaling parameters are available
-      if (!props.scalingParams || Object.keys(props.scalingParams).length === 0) {
-        ElMessage.error('Отсутствуют или некорректны параметры масштабирования');
-        console.error('Empty scaling parameters:', props.scalingParams);
+      if (!inverseScalingColumns.value.length) {
+        ElMessage.warning('Выберите хотя бы один столбец для обратного масштабирования');
         return;
       }
       
       isApplying.value = true;
       
       try {
-        console.log('Applying inverse scaling with params:', {
-          mode: props.mode,
-          id: props.mode === 'dataset' ? props.datasetId : props.resultId,
-          columns: inverseScalingColumns.value,
-          scaling_params: props.scalingParams
-        });
-
-        // Form the request with scaling parameters correctly structured
         const requestData = {
-          columns: inverseScalingColumns.value,
-          scaling_params: props.scalingParams
+          columns: inverseScalingColumns.value
         };
         
-        // Log the request to help with debugging
-        console.log('Sending inverse scaling request:', JSON.stringify(requestData));
+        let scalingResponse;
         
-        // Choose the appropriate API endpoint based on mode
-        let response;
         if (props.mode === 'dataset') {
-          response = await preprocessingService.applyInverseScalingToDataset(
-            props.datasetId, 
-            requestData
+          scalingResponse = await preprocessingService.applyInverseScalingToDataset(
+            props.datasetId, requestData
           );
         } else {
-          response = await preprocessingService.applyInverseScalingToResult(
-            props.resultId, 
-            requestData
+          scalingResponse = await preprocessingService.applyInverseScalingToResult(
+            props.resultId, requestData
           );
         }
         
@@ -516,22 +518,13 @@ export default {
           type: 'success'
         });
         
-        // Notify parent component about successful application
-        emit('inverse-scaling-applied', response.data);
+        emit('inverse-scaling-applied', scalingResponse.data);
         
         // Clear selected columns
         inverseScalingColumns.value = [];
       } catch (error) {
         console.error('Ошибка при применении обратного масштабирования:', error);
-        console.log('Детали ошибки:', error.response?.data || error.message);
-        
-        // More detailed error message for troubleshooting
-        let errorMessage = 'Не удалось применить обратное масштабирование';
-        if (error.response?.data?.detail) {
-          errorMessage = error.response.data.detail;
-        }
-        
-        ElMessage.error(errorMessage);
+        ElMessage.error(error.response?.data?.detail || 'Не удалось применить обратное масштабирование');
       } finally {
         isApplying.value = false;
       }
