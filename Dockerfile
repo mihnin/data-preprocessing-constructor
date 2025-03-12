@@ -7,7 +7,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 
 # Устанавливаем зависимости
-RUN npm ci --no-audit --no-fund
+RUN npm install --no-audit --no-fund
 
 # Копируем исходный код фронтенда
 COPY frontend/ .
