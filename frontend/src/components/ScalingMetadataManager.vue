@@ -466,8 +466,11 @@ export default {
     
     // Функция для применения обратного масштабирования
     const applyInverseScaling = async () => {
-      if (inverseScalingColumns.value.length === 0) return;
-      
+      if (inverseScalingColumns.value.length === 0) {
+        ElMessage.warning('Пожалуйста, выберите столбцы для обратного масштабирования');
+        return;
+      }
+
       // Проверяем наличие параметров масштабирования
       if (!props.scalingParams) {
         ElMessage.error('Отсутствуют параметры масштабирования');
@@ -477,12 +480,32 @@ export default {
       isApplying.value = true;
       
       try {
-        const response = await preprocessingService.applyInverseScaling({
+        console.log('Applying inverse scaling with params:', {
+          mode: props.mode,
           id: props.mode === 'dataset' ? props.datasetId : props.resultId,
           columns: inverseScalingColumns.value,
-          mode: props.mode,
           scaling_params: props.scalingParams
         });
+
+        // Формируем правильную структуру для запроса
+        const requestData = {
+          columns: inverseScalingColumns.value,
+          scaling_params: props.scalingParams
+        };
+        
+        // Выбираем нужный метод в зависимости от режима
+        let response;
+        if (props.mode === 'dataset') {
+          response = await preprocessingService.applyInverseScalingToDataset(
+            props.datasetId, 
+            requestData
+          );
+        } else {
+          response = await preprocessingService.applyInverseScalingToResult(
+            props.resultId, 
+            requestData
+          );
+        }
         
         ElMessage({
           message: 'Обратное масштабирование успешно применено',
@@ -496,6 +519,7 @@ export default {
         inverseScalingColumns.value = [];
       } catch (error) {
         console.error('Ошибка при применении обратного масштабирования:', error);
+        console.log('Детали ошибки:', error.response?.data || error.message);
         ElMessage.error(error.response?.data?.detail || 'Не удалось применить обратное масштабирование');
       } finally {
         isApplying.value = false;

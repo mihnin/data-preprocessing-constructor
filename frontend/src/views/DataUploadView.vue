@@ -579,7 +579,10 @@ export default defineComponent({
     
     // Функция для прямого применения обратного масштабирования
     const applyDirectInverseScaling = async () => {
-      if (!scalingParams.value || !analysisResult.value?.dataset_id) return;
+      if (!scalingParams.value || !analysisResult.value?.dataset_id) {
+        ElMessage.warning('Необходимы параметры масштабирования и ID набора данных');
+        return;
+      }
       
       isDirectProcessing.value = true;
       
@@ -592,6 +595,9 @@ export default defineComponent({
           columns = scalingParams.value.standardization.columns;
         } else if (scalingParams.value.columns) {
           columns = scalingParams.value.columns;
+        } else if (scalingParams.value.standardization?.params) {
+          // Если есть параметры, возьмём их ключи как имена столбцов
+          columns = Object.keys(scalingParams.value.standardization.params);
         } else if (scalingParams.value.parameters) {
           // Если есть параметры, возьмём их ключи как имена столбцов
           columns = Object.keys(scalingParams.value.parameters);
@@ -603,6 +609,12 @@ export default defineComponent({
           isDirectProcessing.value = false;
           return;
         }
+        
+        console.log('Applying inverse scaling with params:', {
+          dataset_id: analysisResult.value.dataset_id,
+          columns: columns,
+          scaling_params: scalingParams.value
+        });
         
         const response = await preprocessingService.applyInverseScalingToDataset(
           analysisResult.value.dataset_id,

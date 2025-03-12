@@ -67,21 +67,35 @@ export default {
 
   // Метод для применения обратного масштабирования к датасету
   applyInverseScalingToDataset(datasetId, data) {
+    console.log('Отправка запроса на обратное масштабирование датасета:', datasetId, data);
     return apiClient.post(`/datasets/${datasetId}/apply-inverse-scaling`, data);
   },
   
   // Метод для применения обратного масштабирования к результату
   applyInverseScalingToResult(resultId, data) {
+    console.log('Отправка запроса на обратное масштабирование результата:', resultId, data);
     return apiClient.post(`/preprocessing/apply-inverse-scaling/${resultId}`, data);
   },
   
   // Общий метод, который выбирает нужный эндпоинт в зависимости от режима
   applyInverseScaling(data) {
-    const { id, mode } = data;
+    const { id, mode, columns, scaling_params } = data;
+    
+    // Проверяем наличие необходимых данных
+    if (!id || !columns || !columns.length || !scaling_params) {
+      console.error('Недостаточно данных для обратного масштабирования', data);
+      throw new Error('Необходимо указать ID, столбцы и параметры масштабирования');
+    }
+    
+    const requestData = {
+      columns: columns,
+      scaling_params: scaling_params
+    };
+    
     if (mode === 'dataset') {
-      return this.applyInverseScalingToDataset(id, data);
+      return this.applyInverseScalingToDataset(id, requestData);
     } else {
-      return this.applyInverseScalingToResult(id, data);
+      return this.applyInverseScalingToResult(id, requestData);
     }
   }
 };

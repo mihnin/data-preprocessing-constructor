@@ -263,11 +263,33 @@ async def apply_inverse_scaling_to_dataset(dataset_id: str, data: dict):
     if is_file_processing(dataset_id):
         return {"status": "processing", "message": "Файл в данный момент обрабатывается"}
     
+    # Проверяем входные данные и логируем их для диагностики
+    logging.info(f"Получены данные для обратного масштабирования: {data}")
+    
     columns = data.get("columns", [])
     scaling_params = data.get("scaling_params")
     
-    if not columns or not scaling_params:
-        raise HTTPException(status_code=400, detail="Необходимо указать столбцы и параметры масштабирования")
+    if not columns:
+        logging.warning(f"Не указаны столбцы для обратного масштабирования: {data}")
+        raise HTTPException(status_code=400, detail="Необходимо указать столбцы для масштабирования")
+    
+    if not scaling_params:
+        logging.warning(f"Не указаны параметры масштабирования: {data}")
+        raise HTTPException(status_code=400, detail="Необходимо указать параметры масштабирования")
+    
+    # Проверяем структуру scaling_params
+    if isinstance(scaling_params, dict) and not any([
+        "standardization" in scaling_params,
+        "type" in scaling_params,
+        "method" in scaling_params,
+        "params" in scaling_params,
+        "parameters" in scaling_params
+    ]):
+        logging.warning(f"Неверная структура параметров масштабирования: {scaling_params}")
+        raise HTTPException(
+            status_code=400, 
+            detail="Параметры масштабирования должны содержать информацию о методе и значениях"
+        )
     
     async def process_inverse_scaling():
         # Ищем исходный файл датасета
@@ -289,6 +311,7 @@ async def apply_inverse_scaling_to_dataset(dataset_id: str, data: dict):
         result_id = str(uuid.uuid4())
         
         # Применяем обратное масштабирование
+        from services.preprocessing_service import apply_inverse_scaling
         processed_df = apply_inverse_scaling(df, columns, scaling_params)
         
         # Сохраняем результат
