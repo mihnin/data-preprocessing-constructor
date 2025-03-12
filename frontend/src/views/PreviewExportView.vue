@@ -144,7 +144,7 @@
             <el-form-item label="Формат экспорта:">
               <el-radio-group v-model="exportFormat">
                 <el-radio label="csv">CSV</el-radio>
-                <el-radio label="excel" disabled>Excel</el-radio>
+                <el-radio label="excel">Excel</el-radio>
               </el-radio-group>
             </el-form-item>
             
@@ -273,14 +273,18 @@ export default defineComponent({
       isExporting.value = true;
       
       try {
-        // Запрос для экспорта данных
-        const response = await preprocessingService.exportDataset(resultId.value);
+        // Запрос для экспорта данных с учетом выбранного формата
+        const response = await preprocessingService.exportDataset(resultId.value, exportFormat.value);
         
         // Создание ссылки для скачивания
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `processed_data_${resultId.value}.csv`);
+        
+        // Устанавливаем правильное расширение файла
+        const fileExtension = exportFormat.value === 'excel' ? 'xlsx' : 'csv';
+        link.setAttribute('download', `processed_data_${resultId.value}.${fileExtension}`);
+        
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -466,5 +470,12 @@ export default defineComponent({
   display: flex;
   justify-content: space-between;
   margin-top: 20px;
+}
+
+.export-options {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
 }
 </style>
