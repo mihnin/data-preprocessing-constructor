@@ -411,6 +411,14 @@ export default defineComponent({
     const configureMethod = (method) => {
       currentMethod.value = method;
       showConfigDialog.value = true;
+      
+      // Автоматически заполняем целевую переменную, если она уже выбрана
+      if (datasetInfo.value && datasetInfo.value.target_column) {
+        const hasTargetParam = Object.keys(method.parameters).includes('target_column');
+        if (hasTargetParam) {
+          methodConfigs[method.method_id]['target_column'] = datasetInfo.value.target_column;
+        }
+      }
     };
     
     // Сохранение конфигурации метода
@@ -529,9 +537,23 @@ export default defineComponent({
       
       // Для столбцов используем данные из датасета
       if (['columns', 'target_column', 'exog_columns'].includes(paramName) && datasetInfo.value) {
+        // Если это выбор целевой переменной и у нас уже есть целевая переменная
+        if (paramName === 'target_column' && datasetInfo.value.target_column) {
+          // Предустанавливаем значение параметра
+          if (currentMethod.value && methodConfigs[currentMethod.value.method_id]) {
+            methodConfigs[currentMethod.value.method_id][paramName] = datasetInfo.value.target_column;
+          }
+          
+          // Возвращаем все колонки, но отмечаем целевую
+          return datasetInfo.value.columns.map(col => ({
+            value: col.name,
+            label: `${col.name} (${col.type})${col.is_target ? ' - целевая' : ''}`
+          }));
+        }
+        
         return datasetInfo.value.columns.map(col => ({
           value: col.name,
-          label: `${col.name} (${col.type})`
+          label: `${col.name} (${col.type})${col.is_target ? ' - целевая' : ''}`
         }));
       }
       

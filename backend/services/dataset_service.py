@@ -11,7 +11,8 @@ def analyze_dataset(df: pd.DataFrame) -> Dict[str, Any]:
         "row_count": len(df),
         "column_count": len(df.columns),
         "columns": [],
-        "recommended_methods": []
+        "recommended_methods": [],
+        "target_column": None  # Добавляем поле для целевой переменной
     }
     
     # Анализ столбцов
@@ -33,7 +34,8 @@ def analyze_dataset(df: pd.DataFrame) -> Dict[str, Any]:
             "type": "numeric" if is_numeric else "datetime" if is_datetime else "categorical",
             "missing_count": col_data.isna().sum(),
             "unique_count": col_data.nunique(),
-            "is_time_series": False
+            "is_time_series": False,
+            "is_target": False  # Добавляем поле для отметки целевой переменной
         }
         
         if is_numeric:

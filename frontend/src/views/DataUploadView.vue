@@ -118,6 +118,48 @@
             </template>
           </el-table-column>
         </el-table>
+        
+        <el-divider v-if="analysisResult"></el-divider>
+
+        <div v-if="analysisResult" class="target-selection">
+          <h4>Выберите целевую переменную:</h4>
+          <div class="target-selection-content">
+            <el-select 
+              v-model="selectedTargetColumn" 
+              placeholder="Выберите целевую переменную"
+              class="target-select"
+            >
+              <el-option
+                v-for="column in analysisResult.columns"
+                :key="column.name"
+                :label="column.name"
+                :value="column.name"
+              >
+                <span>{{ column.name }}</span>
+                <span class="column-type">({{ column.type }})</span>
+              </el-option>
+            </el-select>
+            
+            <el-button 
+              type="primary" 
+              @click="setTargetColumn" 
+              :disabled="!selectedTargetColumn || settingTarget"
+              :loading="settingTarget"
+            >
+              Установить как целевую
+            </el-button>
+          </div>
+          
+          <div v-if="targetSetSuccess" class="target-success">
+            <el-alert
+              title="Целевая переменная успешно установлена"
+              type="success"
+              show-icon
+              :closable="false"
+            >
+            </el-alert>
+          </div>
+        </div>
       </div>
       
       <template #footer>
@@ -287,6 +329,48 @@ export default defineComponent({
       return methodNames[methodId] || methodId;
     };
     
+    // Состояние выбора целевой переменной
+    const selectedTargetColumn = ref(null);
+    const settingTarget = ref(false);
+    const targetSetSuccess = ref(false);
+
+    // Функция установки целевой переменной
+    const setTargetColumn = async () => {
+      if (!selectedTargetColumn.value || !analysisResult.value?.dataset_id) return;
+      
+      settingTarget.value = true;
+      try {
+        // Вызов API для установки целевой переменной
+        await datasetService.setTargetColumn(
+          analysisResult.value.dataset_id, 
+          selectedTargetColumn.value
+        );
+        
+        // Обновляем статус в локальных данных
+        analysisResult.value.target_column = selectedTargetColumn.value;
+        
+        // Обновляем статус is_target во всех колонках
+        analysisResult.value.columns.forEach(col => {
+          col.is_target = col.name === selectedTargetColumn.value;
+        });
+        
+        // Сохраняем обновленные данные в хранилище
+        store.commit('setDatasetInfo', analysisResult.value);
+        
+        targetSetSuccess.value = true;
+        
+        ElMessage({
+          message: `Переменная "${selectedTargetColumn.value}" установлена как целевая`,
+          type: 'success'
+        });
+      } catch (error) {
+        console.error('Ошибка установки целевой переменной:', error);
+        ElMessage.error('Не удалось установить целевую переменную');
+      } finally {
+        settingTarget.value = false;
+      }
+    };
+    
     return {
       selectedFile,
       isCSV,
@@ -308,7 +392,11 @@ export default defineComponent({
       uploadFile,
       proceedToPreprocessing,
       progressFormat,
-      getMethodName
+      getMethodName,
+      selectedTargetColumn,
+      settingTarget,
+      targetSetSuccess,
+      setTargetColumn
     };
   }
 });
@@ -357,5 +445,34 @@ export default defineComponent({
 .method-tag {
   margin-right: 10px;
   margin-bottom: 10px;
+}
+
+.target-selection {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f0f9ff;
+  border-radius: 4px;
+  border: 1px solid #e6f1fc;
+}
+
+.target-selection-content {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+  margin-bottom: 15px;
+}
+
+.target-select {
+  width: 300px;
+  margin-right: 15px;
+}
+
+.column-type {
+  margin-left: 10px;
+  color: #909399;
+}
+
+.target-success {
+  margin-top: 15px;
 }
 </style>
