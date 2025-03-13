@@ -74,92 +74,108 @@
       </el-tab-pane>
       
       <!-- Вкладка ручного ввода параметров -->
-      <el-tab-pane label="Указать параметры вручную" name="manual">
-        <p>
-          Введите параметры масштабирования вручную для каждого столбца.
-        </p>
-        
-        <el-form label-width="200px" :model="manualParams">
-          <el-form-item label="Метод масштабирования:">
-            <el-select v-model="manualParams.method" placeholder="Выберите метод">
-              <el-option label="Стандартизация (StandardScaler)" value="standard" />
-              <el-option label="Нормализация (MinMaxScaler)" value="minmax" />
-            </el-select>
-          </el-form-item>
+      <el-tab-pane label="Указать параметры вручную" name="manual" :disabled="hasScalingParams">
+        <div v-if="hasScalingParams">
+          <el-alert
+            type="info"
+            show-icon
+            :closable="false"
+          >
+            <template #title>
+              Для данного набора данных уже установлены параметры масштабирования.
+            </template>
+            <template #default>
+              Если вы хотите настроить параметры заново, перейдите на вкладку "Импорт/Экспорт" и загрузите новые параметры.
+            </template>
+          </el-alert>
+        </div>
+        <div v-else>
+          <p>
+            Введите параметры масштабирования вручную для каждого столбца.
+          </p>
           
-          <el-form-item label="Выберите столбцы:">
-            <el-select 
-              v-model="manualParams.columns" 
-              multiple
-              placeholder="Выберите столбцы для масштабирования"
-              filterable
-            >
-              <el-option
-                v-for="column in availableColumns"
-                :key="column"
-                :label="column"
-                :value="column"
-              />
-            </el-select>
-          </el-form-item>
-          
-          <div v-if="manualParams.columns.length > 0">
-            <h4>Параметры для выбранных столбцов:</h4>
+          <el-form label-width="200px" :model="manualParams">
+            <el-form-item label="Метод масштабирования:">
+              <el-select v-model="manualParams.method" placeholder="Выберите метод">
+                <el-option label="Стандартизация (StandardScaler)" value="standard" />
+                <el-option label="Нормализация (MinMaxScaler)" value="minmax" />
+              </el-select>
+            </el-form-item>
             
-            <div v-for="column in manualParams.columns" :key="column" class="column-params">
-              <h5>{{ column }}</h5>
+            <el-form-item label="Выберите столбцы:">
+              <el-select 
+                v-model="manualParams.columns" 
+                multiple
+                placeholder="Выберите столбцы для масштабирования"
+                filterable
+              >
+                <el-option
+                  v-for="column in availableColumns"
+                  :key="column"
+                  :label="column"
+                  :value="column"
+                />
+              </el-select>
+            </el-form-item>
+            
+            <div v-if="manualParams.columns.length > 0">
+              <h4>Параметры для выбранных столбцов:</h4>
               
-              <template v-if="manualParams.method === 'standard'">
-                <el-form-item :label="'Среднее (mean) для ' + column">
-                  <el-input-number 
-                    v-model="manualParams.parameters[column].mean" 
-                    :precision="4"
-                    :step="0.1"
-                  />
-                </el-form-item>
+              <div v-for="column in manualParams.columns" :key="column" class="column-params">
+                <h5>{{ column }}</h5>
                 
-                <el-form-item :label="'Стд. отклонение (std) для ' + column">
-                  <el-input-number 
-                    v-model="manualParams.parameters[column].std" 
-                    :precision="4"
-                    :step="0.1"
-                    :min="0.0001"
-                  />
-                </el-form-item>
-              </template>
-              
-              <template v-else-if="manualParams.method === 'minmax'">
-                <el-form-item :label="'Минимум (min) для ' + column">
-                  <el-input-number 
-                    v-model="manualParams.parameters[column].min" 
-                    :precision="4"
-                    :step="0.1"
-                  />
-                </el-form-item>
+                <template v-if="manualParams.method === 'standard'">
+                  <el-form-item :label="'Среднее (mean) для ' + column">
+                    <el-input-number 
+                      v-model="manualParams.parameters[column].mean" 
+                      :precision="4"
+                      :step="0.1"
+                    />
+                  </el-form-item>
+                  
+                  <el-form-item :label="'Стд. отклонение (std) для ' + column">
+                    <el-input-number 
+                      v-model="manualParams.parameters[column].std" 
+                      :precision="4"
+                      :step="0.1"
+                      :min="0.0001"
+                    />
+                  </el-form-item>
+                </template>
                 
-                <el-form-item :label="'Максимум (max) для ' + column">
-                  <el-input-number 
-                    v-model="manualParams.parameters[column].max" 
-                    :precision="4"
-                    :step="0.1"
-                  />
-                </el-form-item>
-              </template>
+                <template v-else-if="manualParams.method === 'minmax'">
+                  <el-form-item :label="'Минимум (min) для ' + column">
+                    <el-input-number 
+                      v-model="manualParams.parameters[column].min" 
+                      :precision="4"
+                      :step="0.1"
+                    />
+                  </el-form-item>
+                  
+                  <el-form-item :label="'Максимум (max) для ' + column">
+                    <el-input-number 
+                      v-model="manualParams.parameters[column].max" 
+                      :precision="4"
+                      :step="0.1"
+                    />
+                  </el-form-item>
+                </template>
+              </div>
             </div>
-          </div>
-          
-          <el-form-item>
-            <el-button 
-              type="primary" 
-              @click="saveManualParams"
-              :disabled="!canSaveManualParams || isSaving"
-            >
-              <i class="el-icon-check" v-if="!isSaving"></i>
-              <i class="el-icon-loading" v-else></i>
-              {{ isSaving ? 'Сохранение...' : 'Сохранить параметры' }}
-            </el-button>
-          </el-form-item>
-        </el-form>
+            
+            <el-form-item>
+              <el-button 
+                type="primary" 
+                @click="saveManualParams"
+                :disabled="!canSaveManualParams || isSaving"
+              >
+                <i class="el-icon-check" v-if="!isSaving"></i>
+                <i class="el-icon-loading" v-else></i>
+                {{ isSaving ? 'Сохранение...' : 'Сохранить параметры' }}
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </div>
       </el-tab-pane>
       
       <!-- Вкладка для обратного масштабирования -->
@@ -424,7 +440,19 @@ export default {
       try {
         isExporting.value = true;
         
-        await preprocessingService.exportMetadata(id);
+        // Получаем ответ с данными
+        const response = await preprocessingService.exportMetadata(id);
+        
+        // Создаем ссылку для скачивания файла
+        const url = window.URL.createObjectURL(new Blob([JSON.stringify(response.data, null, 2)], {
+          type: 'application/json'
+        }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `scaling_metadata_${id}.json`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
         
         ElMessage.success('Метаданные масштабирования успешно экспортированы');
       } catch (error) {
@@ -782,20 +810,25 @@ h5 {
   font-size: 16px;
 }
 
-.no-scaling-params {
-  margin-bottom: 20px;
-}
-
 .selection-info {
+  margin-top: 5px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 5px;
-  margin-bottom: 20px;
 }
 
 .inverse-scaling-info {
+  margin-bottom: 20px;
+}
+
+.no-scaling-params {
   margin-bottom: 15px;
 }
 
+.disabled-tab-message {
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
 </style>
