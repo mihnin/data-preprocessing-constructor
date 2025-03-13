@@ -111,6 +111,7 @@
               :has-scaling-params="hasScalingParams"
               :scaling-method-name="scalingMethodName"
               :available-columns="availableColumns"
+              :scaling-params="scalingParams"
               :in-preprocessing-view="true"
               @metadata-updated="onScalingMetadataUpdated"
               @inverse-scaling-applied="onInverseScalingApplied"

@@ -110,6 +110,7 @@
             :has-scaling-params="hasScalingParams"
             :scaling-method-name="scalingMethodName"
             :available-columns="resultMetadata.columns || []"
+            :scaling-params="scalingParams"
             @metadata-updated="onMetadataUpdated"
             @inverse-scaling-applied="onInverseScalingApplied"
           />
@@ -554,6 +555,16 @@ export default defineComponent({
       });
     };
 
+    // Получение параметров масштабирования
+    const scalingParams = computed(() => {
+      // Первый вариант - брать из метаданных результата
+      if (resultMetadata.value && resultMetadata.value.scaling_params) {
+        return resultMetadata.value.scaling_params;
+      }
+      // Второй вариант - брать из хранилища
+      return store.state.scalingParams;
+    });
+
     return {
       resultId,
       processingStatus,
@@ -580,7 +591,8 @@ export default defineComponent({
       hasScalingParams,
       scalingMethodName,
       onMetadataUpdated,
-      onInverseScalingApplied
+      onInverseScalingApplied,
+      scalingParams
     };
   },
 });
