@@ -23,55 +23,13 @@
       </div>
       
       <div class="help-content" ref="contentRef" v-html="renderedContent"></div>
-      
-      <div class="feedback-container">
-        <h3>Была ли эта информация полезной?</h3>
-        <div class="feedback-buttons">
-          <el-button type="success" icon="el-icon-check" @click="provideFeedback(true)">Да, спасибо!</el-button>
-          <el-button type="info" icon="el-icon-message" @click="showFeedbackForm = true">У меня есть предложения</el-button>
-        </div>
-      </div>
-
-      <el-dialog
-        title="Ваше мнение важно для нас"
-        v-model="showFeedbackForm"
-        width="50%"
-      >
-        <el-form :model="feedbackForm">
-          <el-form-item label="Какой раздел нуждается в улучшении?">
-            <el-select v-model="feedbackForm.section" placeholder="Выберите раздел">
-              <el-option
-                v-for="section in sections"
-                :key="section.id"
-                :label="section.title"
-                :value="section.id"
-              ></el-option>
-            </el-select>
-          </el-form-item>
-          <el-form-item label="Ваши предложения">
-            <el-input
-              type="textarea"
-              v-model="feedbackForm.message"
-              :rows="5"
-              placeholder="Опишите, какую информацию следует добавить или изменить"
-            ></el-input>
-          </el-form-item>
-        </el-form>
-        <template #footer>
-          <span class="dialog-footer">
-            <el-button @click="showFeedbackForm = false">Отмена</el-button>
-            <el-button type="primary" @click="submitFeedback">Отправить</el-button>
-          </span>
-        </template>
-      </el-dialog>
     </el-card>
   </div>
 </template>
 
 <script>
-import { defineComponent, ref, reactive, onMounted, onUnmounted } from 'vue';
+import { defineComponent, ref, onMounted, onUnmounted } from 'vue';
 import { marked } from 'marked';
-import { ElMessage } from 'element-plus';
 
 export default defineComponent({
   name: 'HelpView',
@@ -451,11 +409,6 @@ A: Рекомендуется выбирать такое количество �
     const activeSection = ref('introduction');
     const contentRef = ref(null);
     const showScrollTop = ref(false);
-    const showFeedbackForm = ref(false);
-    const feedbackForm = reactive({
-      section: '',
-      message: ''
-    });
     
     // Определение разделов для меню содержания
     const sections = [
@@ -519,36 +472,6 @@ A: Рекомендуется выбирать такое количество �
         behavior: 'smooth'
       });
     };
-    
-    const provideFeedback = (positive) => {
-      if (positive) {
-        ElMessage({
-          message: 'Спасибо за положительный отзыв!',
-          type: 'success'
-        });
-      }
-    };
-    
-    const submitFeedback = () => {
-      if (!feedbackForm.section || !feedbackForm.message) {
-        ElMessage({
-          message: 'Пожалуйста, заполните все поля',
-          type: 'warning'
-        });
-        return;
-      }
-      
-      // В реальном приложении здесь был бы запрос к API
-      ElMessage({
-        message: 'Спасибо за ваш отзыв! Мы учтем его при обновлении документации.',
-        type: 'success',
-        duration: 3000
-      });
-      
-      showFeedbackForm.value = false;
-      feedbackForm.section = '';
-      feedbackForm.message = '';
-    };
 
     return {
       renderedContent,
@@ -557,11 +480,7 @@ A: Рекомендуется выбирать такое количество �
       showScrollTop,
       contentRef,
       scrollToSection,
-      scrollToTop,
-      provideFeedback,
-      showFeedbackForm,
-      feedbackForm,
-      submitFeedback
+      scrollToTop
     };
   }
 });
@@ -722,28 +641,9 @@ A: Рекомендуется выбирать такое количество �
   text-decoration: underline;
 }
 
-.feedback-container {
-  margin-top: 40px;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  text-align: center;
-}
-
-.feedback-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 15px;
-  margin-top: 15px;
-}
-
 @media (max-width: 768px) {
   .help-header h1 {
     font-size: 24px;
-  }
-  
-  .feedback-buttons {
-    flex-direction: column;
   }
 }
 </style>
