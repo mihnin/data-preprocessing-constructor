@@ -11,6 +11,7 @@ from pathlib import Path
 from fastapi.responses import FileResponse
 
 # Импорты из собственных модулей
+from services.preprocessing_service import apply_inverse_scaling
 from services.preprocessing_service import get_preprocessing_methods, apply_preprocessing
 from utils.file_utils import get_file_path_by_id, get_processed_file_path
 from utils.json_utils import convert_numpy_types
