@@ -120,40 +120,151 @@
           <template #header>
             <div class="card-header">
               <span>Предпросмотр данных</span>
-              <el-button type="primary" @click="loadDataPreview" :loading="isPreviewLoading">
-                Загрузить предпросмотр
-              </el-button>
+              <div class="header-actions">
+                <el-button 
+                  type="primary" 
+                  @click="loadDataPreview" 
+                  :loading="isPreviewLoading"
+                  size="small"
+                >
+                  Обновить данные
+                </el-button>
+                <el-dropdown @command="handleColumnVisibility" trigger="click">
+                  <el-button type="info" size="small" plain>
+                    Видимость столбцов <i class="el-icon-arrow-down"></i>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="show-all">Показать все</el-dropdown-item>
+                      <el-dropdown-item command="hide-all">Скрыть все</el-dropdown-item>
+                      <el-dropdown-item divided></el-dropdown-item>
+                      <el-dropdown-item 
+                        v-for="column in resultMetadata.columns" 
+                        :key="column"
+                        :command="`toggle-${column}`"
+                      >
+                        <el-checkbox 
+                          v-model="visibleColumns[column]" 
+                          @click.stop
+                        >
+                          {{ column }}
+                        </el-checkbox>
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
             </div>
           </template>
+          
+          <!-- Fix for the spinner component -->
           <div v-if="isPreviewLoading" class="preview-loading">
-            <el-spinner></el-spinner>
+            <el-icon class="is-loading"><loading /></el-icon>
             <p>Загрузка данных...</p>
           </div>
+          
           <div v-else-if="previewError" class="preview-error">
             <el-alert type="error" :closable="false">
               {{ previewError }}
             </el-alert>
           </div>
+          
           <div v-else-if="previewData && previewData.length > 0" class="preview-content">
+            <!-- Улучшенная таблица с расширенными возможностями -->
             <el-table
               :data="previewData"
               border
               style="width: 100%"
               max-height="400"
+              :default-sort="{ prop: defaultSortColumn, order: 'ascending' }"
+              @sort-change="handleSortChange"
+              @header-dragend="handleColumnDrag"
+              v-loading="tableLoading"
             >
+              <!-- Динамические столбцы на основе видимости -->
               <el-table-column
-                v-for="column in resultMetadata.columns"
+                v-for="column in visibleColumnsList"
                 :key="column"
                 :prop="column"
                 :label="column"
                 min-width="150"
-              />
+                sortable
+                :filters="getColumnFilters(column)"
+                :filter-method="filterColumn"
+                filter-placement="bottom"
+                :class="{ 'highlight-column': highlightedColumn === column }"
+              >
+                <template #header>
+                  <div class="column-header">
+                    {{ column }}
+                    <i 
+                      class="el-icon-search" 
+                      @click.stop="openFilterDialog(column)"
+                      title="Расширенная фильтрация"
+                    ></i>
+                  </div>
+                </template>
+              </el-table-column>
             </el-table>
+            
+            <!-- Панель пагинации -->
+            <div class="pagination-controls">
+              <el-pagination
+                :page-size="pageSize"
+                :current-page="currentPage"
+                :total="totalRecords"
+                layout="total, sizes, prev, pager, next"
+                :page-sizes="[10, 20, 50, 100]"
+                @size-change="handleSizeChange"
+                @current-change="handleCurrentChange"
+              >
+              </el-pagination>
+            </div>
           </div>
+          
           <div v-else class="no-preview">
             <p>Нажмите кнопку "Загрузить предпросмотр" для просмотра обработанных данных</p>
           </div>
         </el-card>
+        
+        <!-- Диалог расширенной фильтрации -->
+        <el-dialog
+          v-model="filterDialogVisible"
+          :title="`Фильтрация столбца: ${currentFilterColumn}`"
+          width="50%"
+        >
+          <el-form>
+            <el-form-item label="Тип фильтра">
+              <el-select v-model="filterType" placeholder="Выберите тип фильтра">
+                <el-option label="Содержит" value="contains"></el-option>
+                <el-option label="Равно" value="equals"></el-option>
+                <el-option label="Больше" value="greater"></el-option>
+                <el-option label="Меньше" value="less"></el-option>
+                <el-option label="Диапазон" value="range"></el-option>
+              </el-select>
+            </el-form-item>
+            
+            <template v-if="filterType !== 'range'">
+              <el-form-item label="Значение">
+                <el-input v-model="filterValue" placeholder="Введите значение"></el-input>
+              </el-form-item>
+            </template>
+            
+            <template v-else>
+              <el-form-item label="От">
+                <el-input v-model="filterRangeMin" placeholder="Минимальное значение"></el-input>
+              </el-form-item>
+              <el-form-item label="До">
+                <el-input v-model="filterRangeMax" placeholder="Максимальное значение"></el-input>
+              </el-form-item>
+            </template>
+          </el-form>
+          
+          <template #footer>
+            <el-button @click="filterDialogVisible = false">Отмена</el-button>
+            <el-button type="primary" @click="applyAdvancedFilter">Применить</el-button>
+          </template>
+        </el-dialog>
         
         <el-card class="export-card">
           <template #header>
@@ -196,7 +307,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, onMounted, onUnmounted } from 'vue';
+import { defineComponent, ref, computed, reactive, onMounted, watch, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { ElMessage } from 'element-plus';
@@ -306,26 +417,6 @@ export default defineComponent({
         if (statusInterval.value) {
           clearInterval(statusInterval.value);
         }
-      }
-    };
-    
-    // Загрузка предпросмотра данных
-    const loadDataPreview = async () => {
-      if (!resultId.value) return;
-      
-      isPreviewLoading.value = true;
-      previewError.value = null;
-      
-      try {
-        // Здесь должен быть запрос для получения превью данных
-        // Пример заглушки:
-        const response = await preprocessingService.getDataPreview(resultId.value);
-        previewData.value = response.data.preview;
-      } catch (error) {
-        console.error('Ошибка загрузки предпросмотра:', error);
-        previewError.value = 'Не удалось загрузить предпросмотр данных';
-      } finally {
-        isPreviewLoading.value = false;
       }
     };
     
@@ -440,7 +531,7 @@ export default defineComponent({
             'day_of_week': 'День недели',
             'day_of_month': 'День месяца',
             'day_of_year': 'День года',
-            'week_of_year': 'Неделя года',
+            'week_of_year': 'Неделя года'
           };
           return value.map(component => componentLabels[component] || component).join(', ');
         }
@@ -531,10 +622,10 @@ export default defineComponent({
       }
       ElMessage({
         message: 'Параметры масштабирования обновлены',
-        type: 'success'
+        type: 'success',
       });
     };
-
+    
     // Обработчик события применения обратного масштабирования
     const onInverseScalingApplied = (data) => {
       console.log('Результат обратного масштабирования:', data);
@@ -554,7 +645,7 @@ export default defineComponent({
         duration: 5000
       });
     };
-
+    
     // Получение параметров масштабирования
     const scalingParams = computed(() => {
       // Первый вариант - брать из метаданных результата
@@ -564,7 +655,185 @@ export default defineComponent({
       // Второй вариант - брать из хранилища
       return store.state.scalingParams;
     });
-
+    
+    // Состояние таблицы данных
+    const visibleColumns = reactive({});
+    const defaultSortColumn = ref('');
+    const currentSortColumn = ref('');
+    const currentSortOrder = ref('ascending');
+    const tableLoading = ref(false);
+    const highlightedColumn = ref('');
+    
+    // Пагинация
+    const pageSize = ref(20);
+    const currentPage = ref(1);
+    const totalRecords = ref(0);
+    
+    // Фильтрация
+    const filterDialogVisible = ref(false);
+    const currentFilterColumn = ref('');
+    const filterType = ref('contains');
+    const filterValue = ref('');
+    const filterRangeMin = ref('');
+    const filterRangeMax = ref('');
+    const activeFilters = reactive({});
+    
+    // Вычисляемые свойства
+    const visibleColumnsList = computed(() => {
+      if (!resultMetadata.value || !resultMetadata.value.columns || !Array.isArray(resultMetadata.value.columns)) {
+        return [];
+      }
+      return resultMetadata.value.columns.filter(col => visibleColumns[col] !== false);
+    });
+    
+    // Инициализация состояния видимости столбцов
+    watch(() => resultMetadata.value?.columns, (newColumns) => {
+      if (newColumns) {
+        // По умолчанию все столбцы видимы
+        newColumns.forEach(col => {
+          if (visibleColumns[col] === undefined) {
+            visibleColumns[col] = true;
+          }
+        });
+        // Устанавливаем первый столбец как столбец сортировки по умолчанию
+        if (newColumns.length > 0 && !defaultSortColumn.value) {
+          defaultSortColumn.value = newColumns[0];
+        }
+      }
+    }, { immediate: true });
+    
+    // Функции-обработчики
+    const handleColumnVisibility = (command) => {
+      if (command === 'show-all') {
+        resultMetadata.value.columns.forEach(col => {
+          visibleColumns[col] = true;
+        });
+      } else if (command === 'hide-all') {
+        resultMetadata.value.columns.forEach(col => {
+          visibleColumns[col] = false;
+        });
+      } else if (command.startsWith('toggle-')) {
+        const column = command.replace('toggle-', '');
+        visibleColumns[column] = !visibleColumns[column];
+      }
+    };
+    
+    const handleSortChange = ({ prop, order }) => {
+      currentSortColumn.value = prop;
+      currentSortOrder.value = order;
+      reloadFilteredData();
+    };
+    
+    const handleColumnDrag = (newWidth, oldWidth, column) => {
+      // Обработка перетаскивания столбцов для изменения их ширины
+      console.log(`Column ${column.label} resized from ${oldWidth} to ${newWidth}`);
+    };
+    
+    const getColumnFilters = (column) => {
+      // Генерация фильтров для столбца на основе данных
+      if (!previewData.value || previewData.value.length === 0) return [];
+      // Получаем уникальные значения для столбца
+      const uniqueValues = [...new Set(previewData.value
+        .map(row => row[column])
+        .filter(val => val !== null && val !== undefined))];
+      
+      // Возвращаем массив объектов для фильтра
+      return uniqueValues.slice(0, 10).map(value => ({
+        text: String(value),
+        value: value
+      }));
+    };
+    
+    const filterColumn = (value, row, column) => {
+      // Стандартная функция фильтрации для el-table
+      const cellValue = row[column.property];
+      if (cellValue === undefined || cellValue === null) return false;
+      return String(cellValue).toLowerCase().includes(String(value).toLowerCase());
+    };
+    
+    const openFilterDialog = (column) => {
+      currentFilterColumn.value = column;
+      // Сбрасываем значения фильтра
+      filterType.value = 'contains';
+      filterValue.value = '';
+      filterRangeMin.value = '';
+      filterRangeMax.value = '';
+      filterDialogVisible.value = true;
+    };
+    
+    const applyAdvancedFilter = () => {
+      // Сохраняем настройки фильтра
+      activeFilters[currentFilterColumn.value] = {
+        type: filterType.value,
+        value: filterValue.value,
+        rangeMin: filterRangeMin.value,
+        rangeMax: filterRangeMax.value
+      };
+      filterDialogVisible.value = false;
+      
+      // Применяем фильтр к данным
+      reloadFilteredData();
+      // Подсвечиваем отфильтрованный столбец
+      highlightedColumn.value = currentFilterColumn.value;
+    };
+    
+    const reloadFilteredData = () => {
+      // Перезагружаем данные с учетом фильтров и сортировки
+      tableLoading.value = true;
+      // Здесь вы можете добавить логику для загрузки данных с сервера
+      // с учетом фильтров, сортировки и пагинации
+      
+      // Для простоты примера, делаем имитацию запроса
+      setTimeout(() => {
+        tableLoading.value = false;
+      }, 500);
+    };
+    
+    const handleSizeChange = (size) => {
+      pageSize.value = size;
+      reloadFilteredData();
+    };
+    
+    const handleCurrentChange = (page) => {
+      currentPage.value = page;
+      reloadFilteredData();
+    };
+    
+    // Модифицированная функция загрузки данных
+    const loadDataPreview = async () => {
+      if (!resultId.value) return;
+      
+      isPreviewLoading.value = true;
+      previewError.value = null;
+      
+      try {
+        // Загружаем данные с учетом пагинации
+        const response = await preprocessingService.getDataPreview(
+          resultId.value, 
+          pageSize.value, 
+          (currentPage.value - 1) * pageSize.value
+        );
+        
+        previewData.value = response.data.preview;
+        totalRecords.value = response.data.total_count || 0;
+        
+        // Инициализация видимости столбцов
+        if (previewData.value && previewData.value.length > 0) {
+          const columns = Object.keys(previewData.value[0]);
+          columns.forEach(col => {
+            if (visibleColumns[col] === undefined) {
+              visibleColumns[col] = true;
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки предпросмотра:', error);
+        previewError.value = 'Не удалось загрузить предпросмотр данных';
+      } finally {
+        isPreviewLoading.value = false;
+      }
+    };
+    
     return {
       resultId,
       processingStatus,
@@ -592,7 +861,30 @@ export default defineComponent({
       scalingMethodName,
       onMetadataUpdated,
       onInverseScalingApplied,
-      scalingParams
+      scalingParams,
+      visibleColumns,
+      visibleColumnsList,
+      defaultSortColumn,
+      tableLoading,
+      highlightedColumn,
+      pageSize,
+      currentPage,
+      totalRecords,
+      filterDialogVisible,
+      currentFilterColumn,
+      filterType,
+      filterValue,
+      filterRangeMin,
+      filterRangeMax,
+      handleColumnVisibility,
+      handleSortChange,
+      handleColumnDrag,
+      getColumnFilters,
+      filterColumn,
+      openFilterDialog,
+      applyAdvancedFilter,
+      handleSizeChange,
+      handleCurrentChange
     };
   },
 });
@@ -605,7 +897,7 @@ export default defineComponent({
   padding: 20px;
 }
 
-.processing-card, .error-card {
+.processing-card, .error-card, .data-preview, .export-card {
   margin-top: 20px;
   text-align: center;
 }
@@ -634,7 +926,6 @@ export default defineComponent({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
 }
 
 .column-tag {
@@ -685,10 +976,90 @@ export default defineComponent({
 .cell-content {
   display: inline-block;
   max-width: 300px;
-  font-weight: bold;
-  color: #67c23a;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.column-header i {
+  cursor: pointer;
+  color: #909399;
+}
+
+.column-header i:hover {
+  color: #409EFF;
+}
+
+.highlight-column {
+  background-color: #ecf5ff;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.preview-content {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.el-table {
+  min-width: 800px; /* Обеспечивает горизонтальную прокрутку для узких экранов */
+}
+
+.el-table .cell {
+  word-break: normal;
+  white-space: nowrap;
+}
+
+.cell-content {
+  display: inline-block;
+  max-width: 300px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.column-header i {
+  cursor: pointer;
+  color: #909399;
+}
+
+.column-header i:hover {
+  color: #409EFF;
+}
+
+.highlight-column {
+  background-color: #ecf5ff;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
 }
 </style>
