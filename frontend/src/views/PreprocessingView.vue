@@ -584,27 +584,28 @@ export default defineComponent({
         // Флаг для отслеживания наличия метода inverse_scaling
         let hasInverseScaling = false;
         
-        // Добавляем выбранные методы (кроме вкладки "Обратное масштабирование")
-        if (hasSelectedMethods.value) {
-          selectedMethodsList.value.forEach(method => {
-            // Проверяем наличие метода inverse_scaling
-            if (method.method_id === 'inverse_scaling') {
-              hasInverseScaling = true;
+        // Добавляем выбранные методы
+        selectedMethodsList.value.forEach(method => {
+          // Проверяем наличие метода inverse_scaling
+          if (method.method_id === 'inverse_scaling') {
+            hasInverseScaling = true;
+            
+            // Проверяем наличие выбранных столбцов и параметров
+            if (!inverseScalingColumns.value || inverseScalingColumns.value.length === 0) {
+              console.warn('[PreprocessingView] Для обратного масштабирования не выбраны столбцы');
+              ElMessage.warning('Выберите столбцы для обратного масштабирования');
+              isProcessing.value = false;
+              return;
             }
-            methods.push({
-              method_id: method.method_id,
-              parameters: methodConfigs[method.method_id]
-            });
-          });
-        }
-        
-        // Проверяем, активна ли вкладка обратного масштабирования
-        if (activeTab.value === 'inverse-scaling') {
-          if (store.getters.hasScalingParams && 
-              inverseScalingColumns.value && 
-              inverseScalingColumns.value.length > 0 && 
-              !hasInverseScaling) {
-            // Добавляем метод inverse_scaling только если он еще не добавлен
+            
+            if (!store.getters.hasScalingParams) {
+              console.error('[PreprocessingView] Отсутствуют параметры масштабирования');
+              ElMessage.error('Для обратного масштабирования необходимо загрузить метаданные');
+              isProcessing.value = false;
+              return;
+            }
+            
+            // Добавляем метод с правильными параметрами
             methods.push({
               method_id: 'inverse_scaling',
               parameters: {
@@ -612,15 +613,38 @@ export default defineComponent({
                 scaling_params: store.state.scalingParams
               }
             });
+          } else {
+            // Добавляем остальные методы как обычно
+            methods.push({
+              method_id: method.method_id,
+              parameters: methodConfigs[method.method_id]
+            });
           }
+        });
+        
+        // Проверяем, нужно ли добавить метод обратного масштабирования,
+        // если он выбран на вкладке, но не в списке методов
+        if (activeTab.value === 'inverse-scaling' && !hasInverseScaling && 
+            inverseScalingColumns.value.length > 0 && store.getters.hasScalingParams) {
+          console.log('[PreprocessingView] Добавляю метод обратного масштабирования из вкладки');
+          
+          methods.push({
+            method_id: 'inverse_scaling',
+            parameters: {
+              columns: inverseScalingColumns.value,
+              scaling_params: store.state.scalingParams
+            }
+          });
         }
         
-        // Если нет ни одного метода и не выбрана вкладка обратного масштабирования, выводим сообщение
+        // Проверка на пустой список методов
         if (methods.length === 0) {
           ElMessage.warning('Не выбран ни один метод предобработки');
           isProcessing.value = false;
           return;
         }
+        
+        console.log('[PreprocessingView] Отправка методов предобработки:', JSON.stringify(methods, null, 2));
         
         const config = {
           dataset_id: datasetId.value,
@@ -640,7 +664,7 @@ export default defineComponent({
         // Переходим к следующему шагу
         router.push('/preview');
       } catch (error) {
-        console.error('Ошибка обработки:', error);
+        console.error('[PreprocessingView] Ошибка обработки:', error);
         ElMessage.error(error.response?.data?.detail || 'Не удалось запустить предобработку');
       } finally {
         isProcessing.value = false;
@@ -802,33 +826,63 @@ export default defineComponent({
 
     // Обработчики для компонента ScalingMetadataManager
     const onScalingMetadataUpdated = (params) => {
-      store.commit('setScalingParams', params);
+      console.log('[PreprocessingView] Обновление параметров масштабирования:', params);
       
-      // Автоматически выбираем все доступные столбцы для обратного масштабирования
-      if (params.standardization && params.standardization.columns) {
-        inverseScalingColumns.value = params.standardization.columns;
+      // Защитная проверка
+      if (!params) {
+        console.error('[PreprocessingView] Получены пустые параметры масштабирования');
+        ElMessage.error('Получены некорректные параметры масштабирования');
+        return;
       }
       
-      // Автоматически выбираем метод обратного масштабирования
-      updateInverseScalingState(true);
+      // Сохраняем параметры в хранилище
+      store.dispatch('setScalingParams', params);
       
-      // Определяем название метода масштабирования
+      // Определяем тип метода масштабирования для отображения
       if (params.standardization && params.standardization.method) {
         const methodNames = {
-          'standard': 'Стандартизация',
-          'minmax': 'Мин-макс нормализация'
+          'standard': 'Стандартизация (StandardScaler)',
+          'minmax': 'Мин-макс нормализация (MinMaxScaler)',
+          'robust': 'Устойчивое масштабирование (RobustScaler)'
         };
         scalingMethodName.value = methodNames[params.standardization.method] || params.standardization.method;
       }
       
-      // Показываем пользователю, что данные готовы к обратному масштабированию
-      ElMessage({
-        message: 'Метаданные загружены. Выберите столбцы для обратного масштабирования.',
-        type: 'success',
-        duration: 5000
-      });
+      // Автоматически выбираем метод обратного масштабирования
+      selectedMethods['inverse_scaling'] = true;
+      
+      // Извлекаем списки столбцов из параметров масштабирования
+      let columns = [];
+      
+      // Проверяем различные форматы хранения списка столбцов
+      if (params.standardization) {
+        if (params.standardization.columns && Array.isArray(params.standardization.columns)) {
+          columns = params.standardization.columns;
+        } else if (params.standardization.params) {
+          columns = Object.keys(params.standardization.params);
+        }
+      }
+      
+      console.log('[PreprocessingView] Извлеченные столбцы для масштабирования:', columns);
+      
+      // Если найдены столбцы, автоматически выбираем их для обратного масштабирования
+      if (columns.length > 0) {
+        inverseScalingColumns.value = columns;
+        
+        ElMessage({
+          message: `Автоматически выбраны столбцы для обратного масштабирования: ${columns.join(', ')}`,
+          type: 'success',
+          duration: 5000
+        });
+        
+        // Переходим на вкладку обратного масштабирования
+        activeTab.value = 'inverse-scaling';
+      } else {
+        console.warn('[PreprocessingView] Не найдены столбцы для обратного масштабирования');
+        ElMessage.warning('Не удалось определить столбцы для обратного масштабирования');
+      }
     };
-    
+
     const onInverseScalingApplied = (data) => {
       // Сохраняем ID результата и переходим к просмотру
       store.commit('setResultId', data.result_id);

@@ -36,6 +36,16 @@ export default {
   
   // Импорт метаданных масштабирования
   importMetadata(resultId, file) {
+    console.log(`[preprocessingService] Импорт метаданных для результата ${resultId}`);
+    
+    if (!resultId) {
+      return Promise.reject(new Error('ID результата не указан'));
+    }
+    
+    if (!file) {
+      return Promise.reject(new Error('Файл метаданных не указан'));
+    }
+    
     const formData = new FormData();
     formData.append('file', file);
     formData.append('result_id', resultId);
@@ -44,19 +54,46 @@ export default {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
+    })
+    .then(response => {
+      console.log(`[preprocessingService] Успешный импорт метаданных для результата:`, response.data);
+      return response;
+    })
+    .catch(error => {
+      console.error(`[preprocessingService] Ошибка импорта метаданных:`, 
+        error.response?.data || error.message);
+      throw error;
     });
   },
   
   // Импорт метаданных масштабирования для датасета
   importMetadataForDataset(datasetId, file) {
+    console.log(`[preprocessingService] Импорт метаданных для датасета ${datasetId}`);
+    
+    if (!datasetId) {
+      return Promise.reject(new Error('ID датасета не указан'));
+    }
+    
+    if (!file) {
+      return Promise.reject(new Error('Файл метаданных не указан'));
+    }
+    
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('dataset_id', datasetId);
     
     return apiClient.post(`/datasets/${datasetId}/import-metadata`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
+    })
+    .then(response => {
+      console.log(`[preprocessingService] Успешный импорт метаданных для датасета:`, response.data);
+      return response;
+    })
+    .catch(error => {
+      console.error(`[preprocessingService] Ошибка импорта метаданных для датасета:`, 
+        error.response?.data || error.message);
+      throw error;
     });
   },
   
@@ -90,15 +127,27 @@ export default {
   applyInverseScaling(data) {
     const { id, mode, columns, scaling_params } = data;
     
-    // Проверяем наличие необходимых данных
-    if (!id || !columns || !columns.length) {
-      console.error('Недостаточно данных для обратного масштабирования', data);
-      return Promise.reject(new Error('Необходимо указать ID и столбцы для масштабирования'));
+    // Подробная диагностика запроса
+    console.log("[preprocessingService] Запрос на обратное масштабирование:");
+    console.log("ID:", id);
+    console.log("Режим:", mode);
+    console.log("Столбцы:", columns);
+    console.log("Параметры масштабирования:", JSON.stringify(scaling_params, null, 2));
+    
+    // Валидация входных данных
+    if (!id) {
+      console.error("[preprocessingService] Отсутствует ID для обратного масштабирования");
+      return Promise.reject(new Error('Необходимо указать ID набора данных или результата'));
+    }
+    
+    if (!columns || !columns.length) {
+      console.error("[preprocessingService] Не выбраны столбцы для обратного масштабирования");
+      return Promise.reject(new Error('Необходимо указать столбцы для масштабирования'));
     }
     
     // Проверяем наличие параметров масштабирования
     if (!scaling_params || Object.keys(scaling_params).length === 0) {
-      console.error('Отсутствуют параметры масштабирования', data);
+      console.error("[preprocessingService] Отсутствуют параметры масштабирования", data);
       return Promise.reject(new Error('Необходимо указать параметры масштабирования'));
     }
     
@@ -108,20 +157,40 @@ export default {
       scaling_params: scaling_params
     };
     
-    console.log(`Отправка запроса на обратное масштабирование (${mode}:${id}):`, requestData);
+    console.log(`[preprocessingService] Отправка запроса на обратное масштабирование (${mode}:${id}):`, 
+      JSON.stringify(requestData, null, 2));
     
+    // Отправляем запрос в зависимости от режима
+    let endpoint;
     if (mode === 'dataset') {
-      return this.applyInverseScalingToDataset(id, requestData)
-        .catch(error => {
-          console.error('Ошибка при обратном масштабировании датасета:', error.response?.data || error.message);
-          throw error;
-        });
+      endpoint = `/datasets/${id}/apply-inverse-scaling`;
     } else {
-      return this.applyInverseScalingToResult(id, requestData)
-        .catch(error => {
-          console.error('Ошибка при обратном масштабировании результата:', error.response?.data || error.message);
-          throw error;
-        });
+      endpoint = `/preprocessing/apply-inverse-scaling/${id}`;
     }
+    
+    // Используем низкоуровневый метод apiClient.post с обработкой ошибок
+    return apiClient.post(endpoint, requestData)
+      .then(response => {
+        console.log(`[preprocessingService] Получен ответ от API:`, response.data);
+        return response;
+      })
+      .catch(error => {
+        console.error(`[preprocessingService] Ошибка обратного масштабирования:`, 
+          error.response?.data || error.message);
+        
+        // Создаем более информативное сообщение об ошибке
+        let message = 'Ошибка обратного масштабирования';
+        if (error.response?.data?.detail) {
+          message = error.response.data.detail;
+        } else if (error.message) {
+          message = error.message;
+        }
+        
+        // Создаем новый объект ошибки с подробностями
+        const enhancedError = new Error(message);
+        enhancedError.originalError = error;
+        enhancedError.details = error.response?.data;
+        throw enhancedError;
+      });
   }
 };

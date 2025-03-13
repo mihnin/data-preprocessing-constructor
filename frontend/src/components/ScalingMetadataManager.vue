@@ -171,6 +171,28 @@
             show-icon
           >
             <template #title>
+              Состояние метаданных масштабирования
+            </template>
+            <template #default>
+              <div class="metadata-status">
+                <p><strong>Метод масштабирования:</strong> {{ scalingMethodName || 'Не определен' }}</p>
+                <p><strong>Доступные столбцы:</strong> 
+                  <span v-if="getScaledColumns().length > 0">
+                    {{ getScaledColumns().join(', ') }}
+                  </span>
+                  <span v-else>Столбцы не найдены</span>
+                </p>
+              </div>
+            </template>
+          </el-alert>
+          
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-top: 10px;"
+          >
+            <template #title>
               Применение обратного масштабирования
             </template>
             <template #default>
@@ -427,19 +449,34 @@ export default {
         // Создаем FormData с соответствующим ID в зависимости от режима
         let response;
         if (props.mode === 'dataset') {
-          response = await preprocessingService.importMetadataForDataset(id, selectedFile.value);
+          if (!props.datasetId) {
+            throw new Error("ID датасета не указан");
+          }
+          response = await preprocessingService.importMetadataForDataset(props.datasetId, selectedFile.value);
         } else {
-          response = await preprocessingService.importMetadata(id, selectedFile.value);
+          if (!props.resultId) {
+            throw new Error("ID результата не указан");
+          }
+          response = await preprocessingService.importMetadata(props.resultId, selectedFile.value);
         }
         
+        // Детальное логирование ответа для отладки
+        console.log("[ScalingMetadataManager] Ответ сервера при импорте:", response.data);
+        
         const scalingParams = response.data.scaling_params;
+        
+        // Проверяем наличие параметров масштабирования в ответе
+        if (!scalingParams) {
+          console.error("[ScalingMetadataManager] Отсутствуют параметры масштабирования в ответе:", response.data);
+          throw new Error("Сервер вернул ответ без параметров масштабирования");
+        }
         
         ElMessage({
           message: 'Метаданные успешно импортированы',
           type: 'success'
         });
         
-        console.log("Импорт успешен, параметры масштабирования:", scalingParams);
+        console.log("[ScalingMetadataManager] Импортированы параметры:", JSON.stringify(scalingParams, null, 2));
         
         // Оповещаем родительский компонент об обновлении метаданных
         emit('metadata-updated', scalingParams);
@@ -450,8 +487,7 @@ export default {
         activeTab.value = 'inverse';
         
         // Автоматически выбираем все доступные столбцы для обратного масштабирования
-        // Получаем столбцы из параметров масштабирования
-        const scaledColumns = getScaledColumns();
+        const scaledColumns = getScaledColumns(scalingParams);
         inverseScalingColumns.value = scaledColumns;
         
         // Если есть столбцы, показываем уведомление
@@ -462,9 +498,25 @@ export default {
           });
         }
       } catch (error) {
-        console.error('Ошибка импорта метаданных:', error);
-        console.log("Детали ошибки:", error.response?.data || error.message);
-        ElMessage.error(error.response?.data?.detail || 'Не удалось импортировать метаданные');
+        console.error('[ScalingMetadataManager] Ошибка импорта метаданных:', error);
+        console.log("[ScalingMetadataManager] Детали ошибки:", error.response?.data || error.message);
+        
+        // Формируем более информативное сообщение об ошибке
+        let errorMessage = 'Не удалось импортировать метаданные';
+        
+        if (error.response) {
+          if (error.response.status === 400) {
+            errorMessage = 'Некорректный формат файла метаданных';
+          } else if (error.response.status === 404) {
+            errorMessage = 'Не найден датасет или результат для применения метаданных';
+          } else if (error.response.data && error.response.data.detail) {
+            errorMessage = `Ошибка сервера: ${error.response.data.detail}`;
+          }
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        ElMessage.error(errorMessage);
       } finally {
         isImporting.value = false;
       }
@@ -513,7 +565,7 @@ export default {
           type: 'success'
         });
         
-        // Оповещаем родительский компонент об обновлении метаданных
+        // Оповещаем родительский компонент об обновлении метаданных 
         emit('metadata-updated', formattedParams.scaling_params);
         
         // Переходим к вкладке обратного масштабирования
@@ -527,49 +579,64 @@ export default {
     };
     
     // Функция для получения столбцов, к которым применимо масштабирование
-    const getScaledColumns = () => {
-      if (!props.hasScalingParams) return [];
+    const getScaledColumns = (customParams) => {
+      // Используем переданные параметры или текущие из props
+      const params = customParams || props.scalingParams;
       
-      // Получаем список столбцов из параметров масштабирования
-      if (props.scalingParams && props.scalingParams.standardization) {
-        // Сначала проверяем поле columns
-        if (props.scalingParams.standardization.columns && 
-            Array.isArray(props.scalingParams.standardization.columns) && 
-            props.scalingParams.standardization.columns.length > 0) {
-          return props.scalingParams.standardization.columns;
+      console.log("[ScalingMetadataManager] Поиск столбцов в параметрах:", params);
+      
+      if (!params) {
+        console.log("[ScalingMetadataManager] Параметры не определены");
+        return [];
+      }
+      
+      // Проверяем формат standardization (наиболее распространенный)
+      if (params.standardization) {
+        console.log("[ScalingMetadataManager] Найдена секция standardization");
+        
+        // Сначала проверяем явный список столбцов
+        if (params.standardization.columns && 
+            Array.isArray(params.standardization.columns) && 
+            params.standardization.columns.length > 0) {
+          console.log("[ScalingMetadataManager] Использую явно указанные столбцы:", 
+                     params.standardization.columns);
+          return params.standardization.columns;
         }
         
         // Затем проверяем ключи в объекте params
-        if (props.scalingParams.standardization.params) {
-          return Object.keys(props.scalingParams.standardization.params);
+        if (params.standardization.params) {
+          const columnsFromParams = Object.keys(params.standardization.params);
+          console.log("[ScalingMetadataManager] Извлекаю столбцы из params:", columnsFromParams);
+          return columnsFromParams;
         }
       }
       
-      // Альтернативные форматы параметров масштабирования
-      if (props.scalingParams && props.scalingParams.mean && props.scalingParams.std) {
-        // Формат, где mean и std - это объекты с ключами-столбцами
-        const meanColumns = Object.keys(props.scalingParams.mean);
-        const stdColumns = Object.keys(props.scalingParams.std);
+      // Проверяем альтернативный формат с параметрами mean/std
+      if (params.mean && params.std) {
+        const meanColumns = Object.keys(params.mean);
+        const stdColumns = Object.keys(params.std);
         // Возвращаем пересечение (столбцы, которые есть и в mean, и в std)
-        return meanColumns.filter(col => stdColumns.includes(col));
+        const commonColumns = meanColumns.filter(col => stdColumns.includes(col));
+        console.log("[ScalingMetadataManager] Нашел столбцы из mean/std:", commonColumns);
+        return commonColumns;
       }
       
-      if (props.scalingParams && props.scalingParams.min && props.scalingParams.max) {
-        // Формат, где min и max - это объекты с ключами-столбцами
-        const minColumns = Object.keys(props.scalingParams.min);
-        const maxColumns = Object.keys(props.scalingParams.max);
-        // Возвращаем пересечение (столбцы, которые есть и в min, и в max)
-        return minColumns.filter(col => maxColumns.includes(col));
+      // Проверяем формат с явно указанным методом и столбцами
+      if (params.method && params.columns) {
+        console.log("[ScalingMetadataManager] Нашел столбцы в формате method/columns:", 
+                   params.columns);
+        return Array.isArray(params.columns) ? params.columns : [params.columns];
       }
       
-      // Если параметры не определены явно, возвращаем все доступные столбцы
-      // но только если они числовые (если у нас есть такая информация)
-      if (props.availableColumns && props.availableColumns.length > 0) {
-        // Здесь можно было бы отфильтровать только числовые столбцы,
-        // но у нас может не быть информации о типах столбцов
-        return props.availableColumns;
+      // Проверяем формат с методом и параметрами
+      if (params.method && params.params) {
+        const columnsFromMethodParams = Object.keys(params.params);
+        console.log("[ScalingMetadataManager] Извлекаю столбцы из params метода:", 
+                   columnsFromMethodParams);
+        return columnsFromMethodParams;
       }
       
+      console.log("[ScalingMetadataManager] Не удалось найти столбцы в параметрах");
       return [];
     };
     
@@ -580,10 +647,25 @@ export default {
         return;
       }
       
+      // Проверяем наличие параметров масштабирования
+      if (!props.scalingParams || Object.keys(props.scalingParams).length === 0) {
+        console.error("[ScalingMetadataManager] Отсутствуют параметры масштабирования:", props.scalingParams);
+        ElMessage.error('Не найдены параметры масштабирования. Пожалуйста, загрузите метаданные');
+        return;
+      }
+      
       isApplying.value = true;
       
       try {
         const id = props.mode === 'dataset' ? props.datasetId : props.resultId;
+        
+        // Подробное логирование перед отправкой запроса
+        console.log("[ScalingMetadataManager] Подготовка запроса на обратное масштабирование:");
+        console.log("ID:", id);
+        console.log("Режим:", props.mode);
+        console.log("Выбранные столбцы:", inverseScalingColumns.value);
+        console.log("Параметры масштабирования:", JSON.stringify(props.scalingParams, null, 2));
+        
         const requestData = {
           id: id,
           mode: props.mode,
@@ -591,9 +673,11 @@ export default {
           scaling_params: props.scalingParams
         };
         
-        console.log('Применение обратного масштабирования с параметрами:', requestData);
+        console.log("[ScalingMetadataManager] Отправка запроса:", JSON.stringify(requestData, null, 2));
         
         const scalingResponse = await preprocessingService.applyInverseScaling(requestData);
+        
+        console.log("[ScalingMetadataManager] Получен ответ:", scalingResponse.data);
         
         ElMessage({
           message: `Обратное масштабирование успешно применено к ${inverseScalingColumns.value.length} столбцам`,
@@ -608,8 +692,18 @@ export default {
           inverseScalingColumns.value = [];
         }
       } catch (error) {
-        console.error('Ошибка при применении обратного масштабирования:', error);
-        ElMessage.error(error.response?.data?.detail || 'Не удалось применить обратное масштабирование');
+        console.error('[ScalingMetadataManager] Ошибка при применении обратного масштабирования:', error);
+        
+        // Формируем информативное сообщение об ошибке
+        let errorMessage = 'Не удалось применить обратное масштабирование';
+        
+        if (error.response?.data?.detail) {
+          errorMessage = `Ошибка: ${error.response.data.detail}`;
+        } else if (error.message) {
+          errorMessage = `Ошибка: ${error.message}`;
+        }
+        
+        ElMessage.error(errorMessage);
       } finally {
         isApplying.value = false;
       }
@@ -672,38 +766,36 @@ export default {
   background-color: #f5f7fa;
   border-radius: 4px;
   padding: 15px;
+  margin-top: 5px;
   margin-bottom: 15px;
 }
 
 h4 {
   margin-top: 20px;
-  margin-bottom: 10px;
-  font-size: 16px;
-  font-weight: 500;
-  color: #303133;
+  margin-bottom: 20px;
 }
 
 h5 {
   margin-top: 5px;
-  margin-bottom: 15px;
-  color: #409eff;
-  font-size: 14px;
+  margin-bottom: 10px;
   font-weight: 500;
-}
-
-.inverse-scaling-info {
-  margin-bottom: 20px;
-}
-
-.selection-info {
-  margin-top: 5px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: #606266;
+  font-size: 16px;
 }
 
 .no-scaling-params {
   margin-bottom: 20px;
 }
+
+.selection-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 5px;
+  margin-bottom: 20px;
+}
+
+.inverse-scaling-info {
+  margin-bottom: 15px;
+}
+
 </style>

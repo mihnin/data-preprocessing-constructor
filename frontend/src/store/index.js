@@ -18,7 +18,16 @@ export default createStore({
       state.datasetInfo = info;
     },
     setScalingParams(state, params) {
-      state.scalingParams = params;
+      console.log('[store] Сохранение параметров масштабирования:', params);
+      
+      // Проверка на корректность параметров
+      if (!params) {
+        console.error('[store] Попытка сохранить пустые параметры масштабирования');
+        return;
+      }
+      
+      // Глубокое копирование объекта для избежания ссылочных проблем
+      state.scalingParams = JSON.parse(JSON.stringify(params));
     },
     clearPreprocessingState(state) {
       state.datasetId = null;
@@ -48,6 +57,37 @@ export default createStore({
   getters: {
     hasDataset: state => !!state.datasetId,
     hasResult: state => !!state.resultId,
-    hasScalingParams: state => !!state.scalingParams
+    hasScalingParams: state => {
+      if (!state.scalingParams) return false;
+      
+      // Проверка наличия параметров standardization
+      if (state.scalingParams.standardization) {
+        if ((state.scalingParams.standardization.columns && 
+             state.scalingParams.standardization.columns.length > 0) ||
+            (state.scalingParams.standardization.params && 
+             Object.keys(state.scalingParams.standardization.params).length > 0)) {
+          return true;
+        }
+      }
+      
+      // Проверка альтернативных форматов
+      if (state.scalingParams.mean && state.scalingParams.std) {
+        return true;
+      }
+      
+      if (state.scalingParams.min && state.scalingParams.max) {
+        return true;
+      }
+      
+      // Проверка простой структуры с методом и columns/params
+      if (state.scalingParams.method) {
+        if ((state.scalingParams.columns && state.scalingParams.columns.length > 0) ||
+            (state.scalingParams.params && Object.keys(state.scalingParams.params).length > 0)) {
+          return true;
+        }
+      }
+      
+      return false;
+    }
   }
 })
