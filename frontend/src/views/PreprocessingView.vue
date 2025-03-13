@@ -184,10 +184,10 @@
                   placeholder="Выберите значение"
                 >
                   <el-option 
-                    v-for="option in param.options" 
-                    :key="option"
-                    :label="formatOptionLabel(option, paramName)"
-                    :value="option"
+                    v-for="option in getOptionsForParam(param, paramName)"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
                   />
                 </el-select>
               </el-form-item>
@@ -528,6 +528,11 @@ export default defineComponent({
           methodConfigs[method.method_id]['target_column'] = datasetInfo.value.target_column;
         }
       }
+      
+      // Добавляем автоматическое заполнение целевой переменной для временных рядов
+      if (datasetInfo.value && datasetInfo.value.target_column && ['lagging', 'rolling_statistics'].includes(method.method_id)) {
+        methodConfigs[method.method_id]['target_column'] = datasetInfo.value.target_column;
+      }
     };
     
     // Сохранение конфигурации метода
@@ -723,6 +728,31 @@ export default defineComponent({
     };
 
     const getOptionsForParam = (param, paramName) => {
+      // Обработка параметров выбора столбцов
+      if (paramName === 'target_column' || paramName === 'exog_columns') {
+        // Для методов временных рядов нужны числовые столбцы
+        if (datasetInfo.value && datasetInfo.value.columns) {
+          return datasetInfo.value.columns
+            .filter(col => col.type === 'numeric')
+            .map(col => ({
+              value: col.name,
+              label: col.name
+            }));
+        }
+      }
+      
+      // Обработка параметра statistics для rolling_statistics
+      if (paramName === 'statistics' && param.options) {
+        return param.options.map(option => ({
+          value: option,
+          label: option === 'mean' ? 'Среднее' : 
+                 option === 'std' ? 'Станд. отклонение' : 
+                 option === 'min' ? 'Минимум' : 
+                 option === 'max' ? 'Максимум' : option
+        }));
+      }
+      
+      // Существующая обработка для select с options
       if (param.type === 'select' && param.options) {
         return param.options.map(option => ({
           value: option,
@@ -730,7 +760,7 @@ export default defineComponent({
         }));
       }
       
-      // Добавляем логику для параметра columns
+      // Существующая обработка для параметра columns
       if (paramName === 'columns') {
         // Для метода date_components нужно отфильтровать столбцы типа datetime
         if (currentMethod.value && currentMethod.value.method_id === 'date_components') {
