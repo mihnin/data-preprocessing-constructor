@@ -2,16 +2,20 @@
   <div class="header">
     <div class="header-content">
       <h1 class="title">Конструктор предобработки данных</h1>
-      <div class="navigation">
-        <el-steps :active="activeStep" finish-status="success" simple>
-          <el-step title="Загрузка" icon="el-icon-upload"></el-step>
-          <el-step title="Предобработка" icon="el-icon-s-operation"></el-step>
-          <el-step title="Экспорт" icon="el-icon-download"></el-step>
-        </el-steps>
-      </div>
-      <!-- Добавляем кнопку справки -->
-      <div class="help-button">
-        <el-button type="info" icon="el-icon-question" circle @click="goToHelp"></el-button>
+      <div class="navigation-container">
+        <div class="navigation">
+          <el-steps :active="activeStep" finish-status="success" simple>
+            <el-step title="Загрузка" icon="el-icon-upload"></el-step>
+            <el-step title="Предобработка" icon="el-icon-s-operation"></el-step>
+            <el-step title="Экспорт" icon="el-icon-download"></el-step>
+          </el-steps>
+        </div>
+        <!-- Кнопка справки теперь внутри контейнера навигации -->
+        <div class="help-button">
+          <el-tooltip content="Руководство пользователя" placement="bottom">
+            <el-button type="info" icon="el-icon-question" circle @click="goToHelp"></el-button>
+          </el-tooltip>
+        </div>
       </div>
     </div>
   </div>
@@ -42,14 +46,12 @@ export default {
   background-color: #409eff;
   color: white;
   padding: 15px 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .header-content {
   max-width: 1200px;
   margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
 }
 
 .title {
@@ -59,13 +61,32 @@ export default {
   margin-bottom: 15px;
 }
 
-.navigation {
+.navigation-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   background-color: white;
   padding: 15px;
   border-radius: 4px;
 }
 
+.navigation {
+  flex-grow: 1;
+}
+
 .help-button {
   margin-left: 15px;
+}
+
+@media (max-width: 768px) {
+  .navigation-container {
+    flex-direction: column;
+  }
+  
+  .help-button {
+    margin-left: 0;
+    margin-top: 10px;
+    align-self: flex-end;
+  }
 }
 </style>
