@@ -655,4 +655,39 @@ export default defineComponent({
   justify-content: space-between;
 }
 
+.table-container {
+  overflow-x: auto;
+  margin-bottom: 20px;
+  width: 100%;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.el-table {
+  min-width: 800px; /* Обеспечивает минимальную ширину для горизонтальной прокрутки */
+}
+
+.el-table .cell {
+  word-break: normal;
+  white-space: nowrap;
+}
+
+.cell-content {
+  display: inline-block;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new-column {
+  color: #67c23a;
+  font-weight: bold;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
 </style>

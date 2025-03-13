@@ -17,8 +17,8 @@ export default {
     return apiClient.get(`/preprocessing/status/${resultId}`);
   },
   
-  getDataPreview(resultId) {
-    return apiClient.get(`/preprocessing/data/${resultId}?limit=100`);
+  getDataPreview(resultId, limit = 100, offset = 0) {
+    return apiClient.get(`/preprocessing/data/${resultId}?limit=${limit}&offset=${offset}`);
   },
   
   exportDataset(resultId, format = 'csv') {

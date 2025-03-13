@@ -301,6 +301,74 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- Карточка предпросмотра данных -->
+    <el-card class="data-preview">
+      <template #header>
+        <div class="card-header">
+          <span>Предпросмотр данных</span>
+          <el-button type="primary" @click="loadDataPreview" :loading="isPreviewLoading">
+            Загрузить предпросмотр
+          </el-button>
+        </div>
+      </template>
+      
+      <div v-if="isPreviewLoading" class="preview-loading">
+        <el-spinner></el-spinner>
+        <p>Загрузка данных...</p>
+      </div>
+      
+      <div v-else-if="previewError" class="preview-error">
+        <el-alert type="error" :closable="false">
+          {{ previewError }}
+        </el-alert>
+      </div>
+      
+      <div v-else-if="previewData && previewData.length > 0" class="preview-content">
+        <div class="table-container">
+          <el-table
+            :data="previewData"
+            border
+            style="min-width: 800px;"
+            max-height="400"
+            :default-sort="{prop: resultMetadata.columns[0], order: 'ascending'}"
+          >
+            <el-table-column
+              v-for="column in resultMetadata.columns"
+              :key="column"
+              :prop="column"
+              :label="column"
+              min-width="150"
+              sortable
+            >
+              <template #default="scope">
+                <span class="cell-content" :class="{'new-column': isNewColumn(column)}">
+                  {{ formatCellValue(scope.row[column]) }}
+                </span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+        
+        <!-- Добавляем пагинацию -->
+        <div class="pagination-container" v-if="previewData.length > 10">
+          <el-pagination
+            :current-page="currentPage"
+            :page-sizes="[10, 20, 50, 100]"
+            :page-size="pageSize"
+            layout="total, sizes, prev, pager, next, jumper"
+            :total="totalRows"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          >
+          </el-pagination>
+        </div>
+      </div>
+      
+      <div v-else class="no-preview">
+        <p>Нажмите кнопку "Загрузить предпросмотр" для просмотра обработанных данных</p>
+      </div>
+    </el-card>
   </div>
 </template>
 
@@ -346,8 +414,60 @@ export default defineComponent({
     const previewError = ref(null);
     const previewTab = ref('comparison');
     
-    // Состояние обработки
-    const isProcessing = ref(false);
+    // Результат обработки
+    const resultId = computed(() => store.state.resultId);
+
+    // Пагинация и форматирование для таблицы предпросмотра
+    const currentPage = ref(1);
+    const pageSize = ref(20);
+    const totalRows = ref(0);
+
+    const handleSizeChange = (size) => {
+      pageSize.value = size;
+      loadDataPreview();
+    };
+
+    const handleCurrentChange = (page) => {
+      currentPage.value = page;
+      loadDataPreview();
+    };
+
+    // Функция форматирования значений в ячейках
+    const formatCellValue = (value) => {
+      if (value === null || value === undefined) {
+        return 'Н/Д';
+      }
+      
+      if (typeof value === 'number') {
+        // Форматируем числа с учетом десятичных знаков
+        return Number.isInteger(value) ? value : value.toFixed(4);
+      }
+      
+      return value;
+    };
+
+    // Обновленная функция загрузки предпросмотра с учетом пагинации
+    const loadDataPreview = async () => {
+      if (!resultId.value) return;
+      
+      isPreviewLoading.value = true;
+      previewError.value = null;
+      
+      try {
+        // Передаем параметры пагинации
+        const limit = pageSize.value;
+        const offset = (currentPage.value - 1) * pageSize.value;
+        const response = await preprocessingService.getDataPreview(resultId.value, limit, offset);
+        
+        previewData.value = response.data.preview;
+        totalRows.value = response.data.total_count || previewData.value.length;
+      } catch (error) {
+        console.error('Ошибка загрузки предпросмотра:', error);
+        previewError.value = 'Не удалось загрузить предпросмотр данных';
+      } finally {
+        isPreviewLoading.value = false;
+      }
+    };
     
     // Методы для категорий
     const generalMethods = computed(() => 
@@ -416,11 +536,19 @@ export default defineComponent({
       currentMethod.value = method;
       showConfigDialog.value = true;
       
-      // Автоматически заполняем целевую переменную, если она уже выбрана
-      if (datasetInfo.value && datasetInfo.value.target_column) {
-        const hasTargetParam = Object.keys(method.parameters).includes('target_column');
-        if (hasTargetParam) {
-          methodConfigs[method.method_id]['target_column'] = datasetInfo.value.target_column;
+      // Если метод - обратное масштабирование и уже есть параметры масштабирования
+      if (method.method_id === 'inverse_scaling' && scalingParams.value) {
+        // Инициализируем метод с существующими параметрами
+        methodConfigs[method.method_id] = {
+          scaling_params: scalingParams.value
+        };
+      } else {
+        // Автоматически заполняем целевую переменную, если она уже выбрана
+        if (datasetInfo.value && datasetInfo.value.target_column) {
+          const hasTargetParam = Object.keys(method.parameters).includes('target_column');
+          if (hasTargetParam) {
+            methodConfigs[method.method_id]['target_column'] = datasetInfo.value.target_column;
+          }
         }
       }
     };
@@ -672,6 +800,44 @@ export default defineComponent({
     const isNewColumn = (column) => {
       return !previewData.value.original_columns.includes(column);
     };
+
+    // Загрузка предпросмотра данных
+    const loadDataPreview = async () => {
+      isPreviewLoading.value = true;
+      previewError.value = null;
+      previewData.value = null;
+      
+      try {
+        const response = await preprocessingService.getDataPreview(datasetId.value);
+        previewData.value = response.data;
+      } catch (error) {
+        console.error('Ошибка загрузки предпросмотра данных:', error);
+        previewError.value = error.response?.data?.detail || 'Не удалось загрузить предпросмотр данных';
+      } finally {
+        isPreviewLoading.value = false;
+      }
+    };
+
+    // Форматирование значения ячейки
+    const formatCellValue = (value) => {
+      if (value === null || value === undefined) {
+        return 'N/A';
+      }
+      return value;
+    };
+
+    // Пагинация
+    const currentPage = ref(1);
+    const pageSize = ref(10);
+    const totalRows = computed(() => previewData.value ? previewData.value.length : 0);
+    
+    const handleSizeChange = (size) => {
+      pageSize.value = size;
+    };
+    
+    const handleCurrentChange = (page) => {
+      currentPage.value = page;
+    };
     
     return {
       datasetId,
@@ -706,7 +872,14 @@ export default defineComponent({
       getMethodName,
       // Добавляем новые переменные
       scalingParams,
-      hasScalingParams
+      hasScalingParams,
+      loadDataPreview,
+      formatCellValue,
+      currentPage,
+      pageSize,
+      totalRows,
+      handleSizeChange,
+      handleCurrentChange
     };
   }
 });
@@ -808,5 +981,34 @@ export default defineComponent({
 
 .column-tag {
   margin: 5px;
+}
+
+.data-preview {
+  margin-top: 20px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.cell-content {
+  display: inline-block;
+  padding: 5px;
+}
+
+.new-column {
+  font-weight: bold;
+  color: #409EFF;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.no-preview {
+  text-align: center;
+  padding: 20px;
 }
 </style>

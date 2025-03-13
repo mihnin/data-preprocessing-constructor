@@ -199,9 +199,14 @@ async def get_preprocessing_status(result_id: str):
 
 @router.get("/data/{result_id}")
 @handle_exceptions
-async def get_data_preview(result_id: str, limit: int = 100):
+async def get_data_preview(result_id: str, limit: int = 100, offset: int = 0):
     """
-    Получение предпросмотра обработанных данных.
+    Получение предпросмотра обработанных данных с поддержкой пагинации.
+    
+    Args:
+        result_id: Идентификатор результата
+        limit: Количество строк для отображения
+        offset: Смещение (для пагинации)
     """
     # Проверяем, обрабатывается ли файл в данный момент
     if is_file_processing(result_id):
@@ -214,14 +219,22 @@ async def get_data_preview(result_id: str, limit: int = 100):
             raise HTTPException(status_code=404, detail="Результаты не найдены")
         
         try:
-            # Загружаем данные для предпросмотра
-            df = pd.read_csv(result_path, nrows=limit)
+            # Определяем общее количество строк, используя эффективный метод
+            total_count = sum(1 for _ in open(result_path, 'r', encoding='utf-8')) - 1  # -1 для учета заголовка
+            
+            # Загружаем данные для предпросмотра с учетом пагинации
+            # Используем skiprows для пропуска нужного количества строк (кроме заголовка)
+            skiprows = None if offset == 0 else lambda x: x > 0 and x <= offset
+            df = pd.read_csv(result_path, skiprows=skiprows, nrows=limit, encoding='utf-8')
             
             # Заменяем бесконечные значения и NaN на None перед сериализацией
             df = df.replace([np.inf, -np.inf], np.nan)
             
             # Применяем convert_numpy_types к результату перед возвратом
-            result = {"preview": df.to_dict(orient="records")}
+            result = {
+                "preview": df.to_dict(orient="records"),
+                "total_count": total_count
+            }
             return convert_numpy_types(result)
         except Exception as e:
             log_error(e, f"Ошибка загрузки предпросмотра данных для result_id={result_id}")

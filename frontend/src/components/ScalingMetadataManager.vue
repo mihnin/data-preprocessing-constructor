@@ -3,71 +3,78 @@
     <el-divider>Управление параметрами масштабирования</el-divider>
     
     <el-tabs v-model="activeTab">
-      <!-- Вкладка экспорта метаданных -->
-      <el-tab-pane label="Экспорт метаданных" name="export">
-        <el-alert
-          v-if="!hasScalingParams"
-          type="info"
-          show-icon
-          :closable="false"
-        >
-          <template #title>
-            Для этого набора данных не найдены параметры масштабирования.
-          </template>
-        </el-alert>
-        
-        <template v-else>
-          <p>
-            Параметры масштабирования ({{ scalingMethodName }}) можно экспортировать в файл JSON
-            для последующего использования при обратном преобразовании.
-          </p>
+      <!-- Вкладка файловых операций (объединенный импорт и экспорт) -->
+      <el-tab-pane label="Импорт/Экспорт параметров" name="file-operations">
+        <div class="tab-content">
+          <!-- Экспорт метаданных -->
+          <div class="section">
+            <h4>Экспорт метаданных</h4>
+            <el-alert
+              v-if="!hasScalingParams"
+              type="info"
+              show-icon
+              :closable="false"
+            >
+              <template #title>
+                Для этого набора данных не найдены параметры масштабирования.
+              </template>
+            </el-alert>
+            
+            <template v-else>
+              <p>
+                Параметры масштабирования ({{ scalingMethodName }}) можно экспортировать в файл JSON
+                для последующего использования при обратном преобразовании.
+              </p>
+              
+              <el-button 
+                type="primary" 
+                @click="exportMetadata" 
+                :disabled="isExporting"
+              >
+                <i class="el-icon-download" v-if="!isExporting"></i>
+                <i class="el-icon-loading" v-else></i>
+                {{ isExporting ? 'Экспорт...' : 'Экспортировать метаданные' }}
+              </el-button>
+            </template>
+          </div>
           
-          <el-button 
-            type="primary" 
-            @click="exportMetadata" 
-            :disabled="isExporting"
-          >
-            <i class="el-icon-download" v-if="!isExporting"></i>
-            <i class="el-icon-loading" v-else></i>
-            {{ isExporting ? 'Экспорт...' : 'Экспортировать метаданные' }}
-          </el-button>
-        </template>
-      </el-tab-pane>
-      
-      <!-- Вкладка импорта метаданных -->
-      <el-tab-pane label="Импорт метаданных" name="import">
-        <p>
-          Загрузите файл метаданных масштабирования (JSON), сохраненный ранее.
-        </p>
-        
-        <el-upload
-          class="metadata-upload"
-          action="#"
-          :auto-upload="false"
-          :limit="1"
-          :on-change="handleFileChange"
-          :file-list="fileList"
-        >
-          <el-button type="primary">Выбрать файл метаданных</el-button>
-          <template #tip>
-            <div class="el-upload__tip">Только файлы JSON с параметрами масштабирования</div>
-          </template>
-        </el-upload>
-        
-        <el-button 
-          type="success" 
-          @click="importMetadata" 
-          :disabled="!selectedFile || isImporting"
-          style="margin-top: 15px;"
-        >
-          <i class="el-icon-upload2" v-if="!isImporting"></i>
-          <i class="el-icon-loading" v-else></i>
-          {{ isImporting ? 'Импорт...' : 'Импортировать метаданные' }}
-        </el-button>
+          <!-- Импорт метаданных -->
+          <div class="section">
+            <h4>Импорт метаданных</h4>
+            <p>
+              Загрузите файл метаданных масштабирования (JSON), сохраненный ранее.
+            </p>
+            
+            <el-upload
+              class="metadata-upload"
+              action="#"
+              :auto-upload="false"
+              :limit="1"
+              :on-change="handleFileChange"
+              :file-list="fileList"
+            >
+              <el-button type="primary">Выбрать файл метаданных</el-button>
+              <template #tip>
+                <div class="el-upload__tip">Только файлы JSON с параметрами масштабирования</div>
+              </template>
+            </el-upload>
+            
+            <el-button 
+              type="success" 
+              @click="importMetadata" 
+              :disabled="!selectedFile || isImporting"
+              style="margin-top: 15px;"
+            >
+              <i class="el-icon-upload2" v-if="!isImporting"></i>
+              <i class="el-icon-loading" v-else></i>
+              {{ isImporting ? 'Импорт...' : 'Импортировать метаданные' }}
+            </el-button>
+          </div>
+        </div>
       </el-tab-pane>
       
       <!-- Вкладка ручного ввода параметров -->
-      <el-tab-pane label="Ручной ввод параметров" name="manual">
+      <el-tab-pane label="Указать параметры вручную" name="manual">
         <p>
           Введите параметры масштабирования вручную для каждого столбца.
         </p>
@@ -85,6 +92,7 @@
               v-model="manualParams.columns" 
               multiple
               placeholder="Выберите столбцы для масштабирования"
+              filterable
             >
               <el-option
                 v-for="column in availableColumns"
@@ -154,8 +162,8 @@
         </el-form>
       </el-tab-pane>
       
-      <!-- Новая вкладка для обратного масштабирования -->
-      <el-tab-pane label="Обратное преобразование" name="inverse" v-if="hasScalingParams">
+      <!-- Вкладка для обратного масштабирования -->
+      <el-tab-pane label="Применить обратное преобразование" name="inverse" v-if="hasScalingParams">
         <p>
           Применить обратное масштабирование к выбранным столбцам.
         </p>
@@ -166,6 +174,7 @@
               v-model="inverseScalingColumns" 
               multiple
               placeholder="Выберите столбцы"
+              filterable
             >
               <el-option
                 v-for="column in getScaledColumns()"
@@ -204,7 +213,7 @@ export default {
   props: {
     resultId: {
       type: String,
-      required: true
+      default: null
     },
     hasScalingParams: {
       type: Boolean,
@@ -218,7 +227,6 @@ export default {
       type: Array,
       default: () => []
     },
-    // Новые параметры
     mode: {
       type: String,
       default: 'result', // 'result' или 'dataset'
@@ -231,6 +239,11 @@ export default {
     scalingParams: {
       type: Object,
       default: () => ({})
+    },
+    // Флаг для использования в представлении предобработки или предпросмотра
+    inPreprocessingView: {
+      type: Boolean,
+      default: false
     }
   },
   
@@ -238,7 +251,7 @@ export default {
   
   setup(props, { emit }) {
     // Активная вкладка
-    const activeTab = ref('export');
+    const activeTab = ref(props.inPreprocessingView ? 'inverse' : 'file-operations');
     
     // Состояние экспорта
     const isExporting = ref(false);
@@ -260,7 +273,7 @@ export default {
     const inverseScalingColumns = ref([]);
     const isApplying = ref(false);
     
-    // Инициализация параметров для выбранных столбцов
+    // Отслеживание обновления столбцов
     watch(() => manualParams.columns, (newColumns, oldColumns) => {
       // Определяем новые добавленные столбцы
       const addedColumns = newColumns.filter(col => !oldColumns.includes(col));
@@ -290,7 +303,7 @@ export default {
       });
     });
     
-    // Реинициализация параметров при смене метода
+    // Отслеживание изменения метода
     watch(() => manualParams.method, (newMethod) => {
       manualParams.columns.forEach(column => {
         if (newMethod === 'standard') {
@@ -349,21 +362,16 @@ export default {
     
     // Функция экспорта метаданных
     const exportMetadata = async () => {
+      const id = props.mode === 'dataset' ? props.datasetId : props.resultId;
+      if (!id) {
+        ElMessage.warning('Необходим идентификатор данных для экспорта метаданных');
+        return;
+      }
+      
       try {
         isExporting.value = true;
         
-        // Здесь исправляем неиспользуемую переменную response
-        // Было: const response = await preprocessingService.exportScalingMetadata(...
-        // Меняем на один из вариантов:
-        
-        // Вариант 1: Если данные из response не используются вообще
-        await preprocessingService.exportScalingMetadata(
-          props.resultId, 
-          props.scalingMethodName
-        );
-        
-        // ИЛИ Вариант 2: Если нужны данные из response
-        // const { data } = await preprocessingService.exportScalingMetadata(...
+        await preprocessingService.exportMetadata(id);
         
         ElMessage.success('Метаданные масштабирования успешно экспортированы');
       } catch (error) {
@@ -374,49 +382,44 @@ export default {
       }
     };
     
-    // Функция импорта метаданных - ИСПРАВЛЕННАЯ
+    // Функция импорта метаданных
     const importMetadata = async () => {
-      // Check if either resultId or datasetId is available based on mode
+      // Проверяем наличие идентификатора в зависимости от режима
       const id = props.mode === 'dataset' ? props.datasetId : props.resultId;
       if (!id || !selectedFile.value) return;
       
       isImporting.value = true;
       
       try {
-        console.log("Importing metadata file:", selectedFile.value.name);
+        console.log("Импорт файла метаданных:", selectedFile.value.name);
         
-        // Create form data with the appropriate ID based on mode
-        const formData = new FormData();
-        formData.append('file', selectedFile.value);
-        formData.append(props.mode === 'dataset' ? 'dataset_id' : 'result_id', id);
-        
-        // Call the proper import endpoint based on mode and extract scaling params from response
-        let scalingParams;
+        // Создаем FormData с соответствующим ID в зависимости от режима
+        let response;
         if (props.mode === 'dataset') {
-          const response = await preprocessingService.importMetadataForDataset(id, selectedFile.value);
-          scalingParams = response.data.scaling_params;
+          response = await preprocessingService.importMetadataForDataset(id, selectedFile.value);
         } else {
-          const response = await preprocessingService.importMetadata(id, selectedFile.value);
-          scalingParams = response.data.scaling_params;
+          response = await preprocessingService.importMetadata(id, selectedFile.value);
         }
+        
+        const scalingParams = response.data.scaling_params;
         
         ElMessage({
           message: 'Метаданные успешно импортированы',
           type: 'success'
         });
         
-        console.log("Import successful, scaling params:", scalingParams);
+        console.log("Импорт успешен, параметры масштабирования:", scalingParams);
         
         // Оповещаем родительский компонент об обновлении метаданных
         emit('metadata-updated', scalingParams);
         fileList.value = [];
         selectedFile.value = null;
         
-        // After successful import, activate the inverse scaling tab
+        // После успешного импорта активируем вкладку обратного масштабирования
         activeTab.value = 'inverse';
       } catch (error) {
         console.error('Ошибка импорта метаданных:', error);
-        console.log("Error details:", error.response?.data || error.message);
+        console.log("Детали ошибки:", error.response?.data || error.message);
         ElMessage.error(error.response?.data?.detail || 'Не удалось импортировать метаданные');
       } finally {
         isImporting.value = false;
@@ -453,9 +456,7 @@ export default {
         console.log('Сохраняем форматированные параметры:', formattedParams);
         
         // Вызываем соответствующий эндпоинт в зависимости от режима
-        // Удаляем объявление неиспользуемой переменной response
         if (props.mode === 'dataset') {
-          // Предполагаем, что такой метод нужно добавить в сервис
           await preprocessingService.setScalingParamsForDataset(id, formattedParams);
         } else {
           await preprocessingService.setScalingParams(id, formattedParams);
@@ -468,6 +469,9 @@ export default {
         
         // Оповещаем родительский компонент об обновлении метаданных
         emit('metadata-updated', formattedParams);
+        
+        // Переходим к вкладке обратного масштабирования
+        activeTab.value = 'inverse';
       } catch (error) {
         console.error('Ошибка сохранения параметров:', error);
         ElMessage.error(error.response?.data?.detail || 'Не удалось сохранить параметры');
@@ -481,8 +485,14 @@ export default {
       if (!props.hasScalingParams) return [];
       
       // Получаем список столбцов из параметров масштабирования
-      if (props.scalingParams && props.scalingParams.parameters) {
-        return Object.keys(props.scalingParams.parameters);
+      if (props.scalingParams && props.scalingParams.standardization && 
+          props.scalingParams.standardization.columns) {
+        return props.scalingParams.standardization.columns;
+      }
+      
+      if (props.scalingParams && props.scalingParams.standardization && 
+          props.scalingParams.standardization.params) {
+        return Object.keys(props.scalingParams.standardization.params);
       }
       
       // Если параметры не определены явно, возвращаем все доступные столбцы
@@ -499,21 +509,17 @@ export default {
       isApplying.value = true;
       
       try {
+        const id = props.mode === 'dataset' ? props.datasetId : props.resultId;
         const requestData = {
-          columns: inverseScalingColumns.value
+          id: id,
+          mode: props.mode,
+          columns: inverseScalingColumns.value,
+          scaling_params: props.scalingParams
         };
         
-        let scalingResponse;
+        console.log('Применение обратного масштабирования с параметрами:', requestData);
         
-        if (props.mode === 'dataset') {
-          scalingResponse = await preprocessingService.applyInverseScalingToDataset(
-            props.datasetId, requestData
-          );
-        } else {
-          scalingResponse = await preprocessingService.applyInverseScalingToResult(
-            props.resultId, requestData
-          );
-        }
+        const scalingResponse = await preprocessingService.applyInverseScaling(requestData);
         
         ElMessage({
           message: 'Обратное масштабирование успешно применено',
@@ -522,7 +528,7 @@ export default {
         
         emit('inverse-scaling-applied', scalingResponse.data);
         
-        // Clear selected columns
+        // Очищаем выбранные столбцы
         inverseScalingColumns.value = [];
       } catch (error) {
         console.error('Ошибка при применении обратного масштабирования:', error);
@@ -531,6 +537,13 @@ export default {
         isApplying.value = false;
       }
     };
+    
+    // Инициализация при создании компонента
+    if (props.hasScalingParams && props.inPreprocessingView) {
+      // Если компонент используется в представлении предобработки и есть параметры масштабирования,
+      // автоматически выбираем все доступные столбцы для обратного масштабирования
+      inverseScalingColumns.value = getScaledColumns();
+    }
     
     return {
       activeTab,
@@ -560,6 +573,20 @@ export default {
   margin-bottom: 20px;
 }
 
+.tab-content {
+  padding: 10px 0;
+}
+
+.section {
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.section:last-child {
+  border-bottom: none;
+}
+
 .metadata-upload {
   margin-top: 15px;
 }
@@ -574,11 +601,16 @@ export default {
 h4 {
   margin-top: 20px;
   margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #303133;
 }
 
 h5 {
   margin-top: 5px;
   margin-bottom: 15px;
   color: #409eff;
+  font-size: 14px;
+  font-weight: 500;
 }
 </style>
