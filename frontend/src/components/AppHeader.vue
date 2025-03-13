@@ -9,6 +9,10 @@
           <el-step title="Экспорт" icon="el-icon-download"></el-step>
         </el-steps>
       </div>
+      <!-- Добавляем кнопку справки -->
+      <div class="help-button">
+        <el-button type="info" icon="el-icon-question" circle @click="goToHelp"></el-button>
+      </div>
     </div>
   </div>
 </template>
@@ -24,6 +28,11 @@ export default {
       if (route.includes('upload')) return 1;
       return 0;
     }
+  },
+  methods: {
+    goToHelp() {
+      this.$router.push('/help');
+    }
   }
 }
 </script>
@@ -38,6 +47,9 @@ export default {
 .header-content {
   max-width: 1200px;
   margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .title {
@@ -51,5 +63,9 @@ export default {
   background-color: white;
   padding: 15px;
   border-radius: 4px;
+}
+
+.help-button {
+  margin-left: 15px;
 }
 </style>

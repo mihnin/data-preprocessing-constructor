@@ -3,8 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import DataUploadView from '../views/DataUploadView.vue'
 import PreprocessingView from '../views/PreprocessingView.vue'
 import PreviewExportView from '../views/PreviewExportView.vue'
-// Удаляем неиспользуемый импорт
-// import AppHeader from '@/components/AppHeader.vue'  
+import HelpView from '../views/HelpView.vue'  // Добавляем импорт страницы помощи
 
 const routes = [
   {
@@ -26,6 +25,11 @@ const routes = [
     path: '/preview',
     name: 'preview',
     component: PreviewExportView
+  },
+  {
+    path: '/help',
+    name: 'help',
+    component: HelpView  // Добавляем маршрут для страницы помощи
   }
 ]
 

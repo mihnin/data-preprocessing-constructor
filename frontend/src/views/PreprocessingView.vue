@@ -1,6 +1,14 @@
 <template>
   <div class="preprocessing-view">
-    <h1>Выбор методов предобработки</h1>
+    <h1>Выбор методов предобработки
+      <el-button 
+        type="text" 
+        icon="el-icon-question" 
+        circle 
+        @click="$router.push('/help')"
+        style="margin-left: 10px; vertical-align: middle;"
+      ></el-button>
+    </h1>
     
     <el-alert
       v-if="!datasetId"
