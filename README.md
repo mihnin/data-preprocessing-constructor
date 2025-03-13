@@ -33,7 +33,7 @@
 1. Установите Docker Desktop для Windows.
 2. Клонируйте репозиторий:
    ```
-   git clone https://github.com/yourusername/data-preprocessing-constructor.git
+   git clone https://github.com/mihnin/data-preprocessing-constructor.git
    cd data-preprocessing-constructor
    ```
 3. Запустите контейнеры:
@@ -46,7 +46,7 @@
 1. Установите Docker Desktop для Mac.
 2. Клонируйте репозиторий:
    ```
-   git clone https://github.com/yourusername/data-preprocessing-constructor.git
+   git clone https://github.com/mihnin/data-preprocessing-constructor.git
    cd data-preprocessing-constructor
    ```
 3. Запустите контейнеры:
@@ -65,7 +65,7 @@
    ```
 2. Клонируйте репозиторий:
    ```
-   git clone https://github.com/yourusername/data-preprocessing-constructor.git
+   git clone https://github.com/mihnin/data-preprocessing-constructor.git
    cd data-preprocessing-constructor
    ```
 3. Запустите контейнеры:
@@ -158,8 +158,8 @@
      ```
 2. Соберите Docker образ и загрузите его в реестр:
    ```
-   docker build -t yourusername/data-preprocessing-constructor:latest .
-   docker push yourusername/data-preprocessing-constructor:latest
+   docker build -t mihnin/data-preprocessing-constructor:latest .
+   docker push mihnin/data-preprocessing-constructor:latest
    ```
 3. Примените манифесты:
    ```
