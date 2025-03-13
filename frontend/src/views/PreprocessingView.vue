@@ -797,8 +797,7 @@ export default defineComponent({
       router.push('/preview');
     };
 
-    const inverseScalingColumns = ref([]);
-
+  
     return {
       datasetId,
       methods,
