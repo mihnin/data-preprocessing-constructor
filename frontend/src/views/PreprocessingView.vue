@@ -331,7 +331,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, reactive, onMounted } from 'vue';
+import { defineComponent, ref, computed, reactive, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { ElMessage } from 'element-plus';
@@ -350,7 +350,7 @@ export default defineComponent({
     const router = useRouter();
     const store = useStore();
     // Добавляем переменную для хранения выбранных столбцов для обратного масштабирования
-    const inverseScalingColumns = ref([]);
+  
     // Состояние набора данных
     const datasetId = computed(() => store.state.datasetId);
     const datasetInfo = ref(null);
@@ -398,7 +398,7 @@ export default defineComponent({
     // Методы для категорий
     const generalMethods = computed(() => 
       methods.value.filter(method => 
-        !['lagging', 'rolling_statistics', 'time_series_analysis', 'date_components', 'inverse_scaling'].includes(method.method_id)
+        !['lagging', 'rolling_statistics', 'time_series_analysis', 'date_components'].includes(method.method_id)
       )
     );
     
@@ -452,9 +452,42 @@ export default defineComponent({
       }
     });
     
+    // Функция для обновления состояния выбора метода обратного масштабирования
+    const updateInverseScalingState = (isSelected) => {
+      // Обновляем состояние в списке методов
+      selectedMethods['inverse_scaling'] = isSelected;
+      
+      // Если метод не выбран, очищаем список столбцов
+      if (!isSelected) {
+        inverseScalingColumns.value = [];
+      }
+    };
+
+    // Наблюдатель для вкладки
+    watch(() => activeTab.value, (newTab) => {
+      // При переключении на вкладку обратного масштабирования
+      if (newTab === 'inverse-scaling') {
+        // Проверяем наличие параметров масштабирования
+        if (store.getters.hasScalingParams) {
+          // Автоматически выбираем метод, если есть параметры масштабирования
+          updateInverseScalingState(true);
+        }
+      }
+    });
+    
     // Обработка выбора метода
     const handleMethodSelection = (methodId, isSelected) => {
       selectedMethods[methodId] = isSelected;
+      
+      // Автоматический переход на вкладку "Обратное масштабирование" при выборе метода
+      if (methodId === 'inverse_scaling' && isSelected) {
+        activeTab.value = 'inverse-scaling';
+      }
+      
+      // Синхронизация с состоянием обратного масштабирования
+      if (methodId === 'inverse_scaling') {
+        updateInverseScalingState(isSelected);
+      }
     };
     
     // Открытие диалога настройки метода
@@ -771,10 +804,13 @@ export default defineComponent({
     const onScalingMetadataUpdated = (params) => {
       store.commit('setScalingParams', params);
       
-      // Сохраняем выбранные столбцы для обратного масштабирования
-      if (params.columns) {
-        inverseScalingColumns.value = params.columns;
+      // Автоматически выбираем все доступные столбцы для обратного масштабирования
+      if (params.standardization && params.standardization.columns) {
+        inverseScalingColumns.value = params.standardization.columns;
       }
+      
+      // Автоматически выбираем метод обратного масштабирования
+      updateInverseScalingState(true);
       
       // Определяем название метода масштабирования
       if (params.standardization && params.standardization.method) {
@@ -785,9 +821,11 @@ export default defineComponent({
         scalingMethodName.value = methodNames[params.standardization.method] || params.standardization.method;
       }
       
+      // Показываем пользователю, что данные готовы к обратному масштабированию
       ElMessage({
-        message: 'Параметры масштабирования успешно загружены',
-        type: 'success'
+        message: 'Метаданные загружены. Выберите столбцы для обратного масштабирования.',
+        type: 'success',
+        duration: 5000
       });
     };
     
@@ -797,7 +835,8 @@ export default defineComponent({
       router.push('/preview');
     };
 
-  
+    const inverseScalingColumns = ref([]);
+
     return {
       datasetId,
       methods,
