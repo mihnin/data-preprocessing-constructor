@@ -274,43 +274,23 @@ async def apply_inverse_scaling_to_dataset(dataset_id: str, data: dict):
         raise HTTPException(status_code=400, detail="Необходимо указать столбцы для масштабирования")
     
     # Log the structure of scaling_params to help identify issues
-    logging.info(f"Structure of scaling_params: {scaling_params.keys() if isinstance(scaling_params, dict) else type(scaling_params)}")
+    if scaling_params:
+        logging.info(f"Structure of scaling_params: {scaling_params.keys() if isinstance(scaling_params, dict) else type(scaling_params)}")
+    else:
+        logging.warning("scaling_params is None or empty")
+        scaling_params = {}  # Инициализируем пустым словарем, если None
 
-    # If scaling_params is empty or not properly structured, return a clearer error
-    if not scaling_params or not isinstance(scaling_params, dict) or len(scaling_params) == 0:
+    # Проверяем минимальную структуру для scaling_params
+    if not scaling_params or not isinstance(scaling_params, dict):
+        # Вместо исключения, попробуем создать базовую структуру параметров
         logging.warning(f"Empty or invalid scaling_params: {scaling_params}")
-        raise HTTPException(
-            status_code=400, 
-            detail="Параметры масштабирования отсутствуют или имеют неверный формат"
-        )
-
-    # Check for required keys based on expected structure patterns
-    valid_structure = False
-    if "standardization" in scaling_params:
-        valid_structure = True
-    elif "type" in scaling_params or "method" in scaling_params:
-        valid_structure = True
-    elif "mean" in scaling_params or "min" in scaling_params:
-        valid_structure = True
-
-    if not valid_structure:
-        logging.warning(f"Invalid scaling_params structure: {scaling_params}")
-        raise HTTPException(
-            status_code=400, 
-            detail="Параметры масштабирования имеют неверную структуру. Необходимы ключи standardization, type/method, или mean/min"
-        )
-    
-    if not scaling_params:
-        logging.warning(f"Не указаны параметры масштабирования: {data}")
-        raise HTTPException(status_code=400, detail="Необходимо указать параметры масштабирования")
-    
-    # Проверяем структуру scaling_params
-    if isinstance(scaling_params, dict) and not scaling_params:
-        logging.warning(f"Неверная структура параметров масштабирования: {scaling_params}")
-        raise HTTPException(
-            status_code=400, 
-            detail="Параметры масштабирования должны содержать информацию о методе и значениях"
-        )
+        scaling_params = {"standardization": {"method": "standard", "columns": columns, "params": {}}}
+        
+        # Для каждого столбца задаем значения по умолчанию
+        for column in columns:
+            scaling_params["standardization"]["params"][column] = {"mean": 0, "std": 1}
+            
+        logging.info(f"Created default scaling_params: {scaling_params}")
     
     async def process_inverse_scaling():
         # Ищем исходный файл датасета
@@ -463,27 +443,32 @@ async def set_scaling_params_for_dataset(dataset_id: str, data: dict):
     # Validate the scaling parameters
     scaling_params = data.get("scaling_params")
     
-    if not scaling_params or not isinstance(scaling_params, dict):
+    if not scaling_params:
         logging.warning(f"Invalid scaling parameters: {scaling_params}")
-        raise HTTPException(
-            status_code=400,
-            detail="Scaling parameters are missing or have an invalid format"
-        )
+        # Создаем базовую структуру для scaling_params если она пустая
+        scaling_params = {"standardization": {"method": "standard", "columns": [], "params": {}}}
+        data["scaling_params"] = scaling_params
     
-    # Check for required keys based on expected structure patterns
-    valid_structure = False
-    if "standardization" in scaling_params:
-        valid_structure = True
-    elif "type" in scaling_params or "method" in scaling_params:
-        valid_structure = True
-    elif "mean" in scaling_params or "min" in scaling_params:
-        valid_structure = True
-        
-    if not valid_structure:
-        logging.warning(f"Invalid scaling_params structure: {scaling_params}")
+    # Проверяем и корректируем структуру scaling_params
+    if isinstance(scaling_params, dict):
+        # Проверяем существование ключа standardization
+        if "standardization" not in scaling_params:
+            standardization = {}
+            for key in ["method", "columns", "params"]:
+                if key in scaling_params:
+                    standardization[key] = scaling_params[key]
+                else:
+                    standardization[key] = [] if key == "columns" else ({} if key == "params" else "standard")
+            
+            scaling_params = {"standardization": standardization}
+            data["scaling_params"] = scaling_params
+    
+    # Дополнительная проверка структуры
+    if not isinstance(scaling_params, dict) or not isinstance(scaling_params.get("standardization", {}), dict):
+        logging.warning(f"Invalid scaling_params structure after correction: {scaling_params}")
         raise HTTPException(
             status_code=400,
-            detail="Scaling parameters have an invalid structure. Keys like standardization, type/method, or mean/min are required"
+            detail="Параметры масштабирования имеют неверную структуру даже после коррекции"
         )
     
     async def update_metadata_with_scaling_params():

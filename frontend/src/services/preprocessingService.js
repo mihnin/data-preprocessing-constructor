@@ -91,14 +91,15 @@ export default {
     const { id, mode, columns, scaling_params } = data;
     
     // Проверяем наличие необходимых данных
-    if (!id || !columns || !columns.length || !scaling_params) {
+    if (!id || !columns || !columns.length) {
       console.error('Недостаточно данных для обратного масштабирования', data);
-      throw new Error('Необходимо указать ID, столбцы и параметры масштабирования');
+      throw new Error('Необходимо указать ID и столбцы для масштабирования');
     }
     
+    // Готовим данные запроса, убедившись что scaling_params существует
     const requestData = {
       columns: columns,
-      scaling_params: scaling_params
+      scaling_params: scaling_params || {} // Используем пустой объект, если параметры не переданы
     };
     
     if (mode === 'dataset') {

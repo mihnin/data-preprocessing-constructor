@@ -441,16 +441,18 @@ export default {
       try {
         // Форматируем параметры в структуру, ожидаемую бэкендом
         const formattedParams = {
-          standardization: {
-            method: manualParams.method,
-            columns: manualParams.columns,
-            params: {}
+          scaling_params: {
+            standardization: {
+              method: manualParams.method,
+              columns: manualParams.columns,
+              params: {}
+            }
           }
         };
         
         // Преобразуем плоскую структуру параметров в вложенный формат
         manualParams.columns.forEach(column => {
-          formattedParams.standardization.params[column] = manualParams.parameters[column];
+          formattedParams.scaling_params.standardization.params[column] = manualParams.parameters[column];
         });
         
         console.log('Сохраняем форматированные параметры:', formattedParams);
@@ -468,7 +470,7 @@ export default {
         });
         
         // Оповещаем родительский компонент об обновлении метаданных
-        emit('metadata-updated', formattedParams);
+        emit('metadata-updated', formattedParams.scaling_params);
         
         // Переходим к вкладке обратного масштабирования
         activeTab.value = 'inverse';
