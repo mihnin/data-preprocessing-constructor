@@ -38,6 +38,7 @@ export default createStore({
       commit('setResultId', id);
     },
     setScalingParams({ commit }, params) {
+      console.log('Сохранение параметров масштабирования в хранилище:', params);
       commit('setScalingParams', params);
     },
     resetState({ commit }) {

@@ -93,19 +93,35 @@ export default {
     // Проверяем наличие необходимых данных
     if (!id || !columns || !columns.length) {
       console.error('Недостаточно данных для обратного масштабирования', data);
-      throw new Error('Необходимо указать ID и столбцы для масштабирования');
+      return Promise.reject(new Error('Необходимо указать ID и столбцы для масштабирования'));
     }
     
-    // Готовим данные запроса, убедившись что scaling_params существует
+    // Проверяем наличие параметров масштабирования
+    if (!scaling_params || Object.keys(scaling_params).length === 0) {
+      console.error('Отсутствуют параметры масштабирования', data);
+      return Promise.reject(new Error('Необходимо указать параметры масштабирования'));
+    }
+    
+    // Готовим данные запроса
     const requestData = {
       columns: columns,
-      scaling_params: scaling_params || {} // Используем пустой объект, если параметры не переданы
+      scaling_params: scaling_params
     };
     
+    console.log(`Отправка запроса на обратное масштабирование (${mode}:${id}):`, requestData);
+    
     if (mode === 'dataset') {
-      return this.applyInverseScalingToDataset(id, requestData);
+      return this.applyInverseScalingToDataset(id, requestData)
+        .catch(error => {
+          console.error('Ошибка при обратном масштабировании датасета:', error.response?.data || error.message);
+          throw error;
+        });
     } else {
-      return this.applyInverseScalingToResult(id, requestData);
+      return this.applyInverseScalingToResult(id, requestData)
+        .catch(error => {
+          console.error('Ошибка при обратном масштабировании результата:', error.response?.data || error.message);
+          throw error;
+        });
     }
   }
 };

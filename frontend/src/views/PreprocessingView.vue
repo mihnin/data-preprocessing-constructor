@@ -94,6 +94,16 @@
         
         <el-tab-pane label="Обратное масштабирование" name="inverse-scaling">
           <el-card class="method-list">
+            <div v-if="!hasScalingParams" class="no-scaling-params">
+              <el-alert
+                title="Отсутствуют параметры масштабирования"
+                type="info"
+                description="Для применения обратного масштабирования необходимо импортировать параметры или указать их вручную"
+                show-icon
+                :closable="false"
+              />
+            </div>
+            
             <ScalingMetadataManager
               mode="dataset"
               :dataset-id="datasetId"
@@ -339,7 +349,8 @@ export default defineComponent({
   setup() {
     const router = useRouter();
     const store = useStore();
-    
+    // Добавляем переменную для хранения выбранных столбцов для обратного масштабирования
+    const inverseScalingColumns = ref([]);
     // Состояние набора данных
     const datasetId = computed(() => store.state.datasetId);
     const datasetInfo = ref(null);
@@ -387,7 +398,7 @@ export default defineComponent({
     // Методы для категорий
     const generalMethods = computed(() => 
       methods.value.filter(method => 
-        !['lagging', 'rolling_statistics', 'time_series_analysis', 'date_components'].includes(method.method_id)
+        !['lagging', 'rolling_statistics', 'time_series_analysis', 'date_components', 'inverse_scaling'].includes(method.method_id)
       )
     );
     
@@ -448,6 +459,17 @@ export default defineComponent({
     
     // Открытие диалога настройки метода
     const configureMethod = (method) => {
+      // Если метод - обратное масштабирование, перенаправляем на вкладку
+      if (method.method_id === 'inverse_scaling') {
+        ElMessage({
+          message: 'Для настройки параметров обратного масштабирования перейдите на вкладку "Обратное масштабирование"',
+          type: 'info',
+          duration: 5000 // Увеличиваем время отображения сообщения
+        });
+        activeTab.value = 'inverse-scaling'; // Автоматически переключаемся
+        return;
+      }
+
       currentMethod.value = method;
       showConfigDialog.value = true;
       
@@ -456,28 +478,20 @@ export default defineComponent({
         methodConfigs[method.method_id] = {};
       }
       
-      // Если метод - обратное масштабирование и уже есть параметры масштабирования
-      if (method.method_id === 'inverse_scaling' && scalingParams.value) {
-        // Инициализируем метод с существующими параметрами
-        methodConfigs[method.method_id] = {
-          scaling_params: scalingParams.value
-        };
-      } else {
-        // Инициализируем параметры значениями по умолчанию, если они не заданы
-        Object.entries(method.parameters).forEach(([paramName, paramConfig]) => {
-          if (methodConfigs[method.method_id][paramName] === undefined) {
-            methodConfigs[method.method_id][paramName] = paramConfig.default !== undefined 
-              ? paramConfig.default 
-              : (paramConfig.type === 'multiselect' ? [] : null);
-          }
-        });
-        
-        // Автоматически заполняем целевую переменную, если она уже выбрана
-        if (datasetInfo.value && datasetInfo.value.target_column) {
-          const hasTargetParam = Object.keys(method.parameters).includes('target_column');
-          if (hasTargetParam) {
-            methodConfigs[method.method_id]['target_column'] = datasetInfo.value.target_column;
-          }
+      // Инициализируем параметры значениями по умолчанию, если они не заданы
+      Object.entries(method.parameters).forEach(([paramName, paramConfig]) => {
+        if (methodConfigs[method.method_id][paramName] === undefined) {
+          methodConfigs[method.method_id][paramName] = paramConfig.default !== undefined 
+            ? paramConfig.default 
+            : (paramConfig.type === 'multiselect' ? [] : null);
+        }
+      });
+      
+      // Автоматически заполняем целевую переменную, если она уже выбрана
+      if (datasetInfo.value && datasetInfo.value.target_column) {
+        const hasTargetParam = Object.keys(method.parameters).includes('target_column');
+        if (hasTargetParam) {
+          methodConfigs[method.method_id]['target_column'] = datasetInfo.value.target_column;
         }
       }
     };
@@ -521,8 +535,10 @@ export default defineComponent({
     
     // Выполнение полной предобработки
     const processData = async () => {
-      if (!hasSelectedMethods.value && !store.getters.hasScalingParams) {
-        ElMessage.warning('Выберите методы предобработки или загрузите параметры масштабирования');
+      if ((!hasSelectedMethods.value && !store.getters.hasScalingParams) || 
+          (activeTab.value === 'inverse-scaling' && 
+          (!inverseScalingColumns.value || inverseScalingColumns.value.length === 0))) {
+        ElMessage.warning('Выберите методы предобработки или настройте параметры обратного масштабирования');
         return;
       }
       
@@ -532,9 +548,16 @@ export default defineComponent({
         // Формируем список методов предобработки
         const methods = [];
         
-        // Добавляем выбранные методы
+        // Флаг для отслеживания наличия метода inverse_scaling
+        let hasInverseScaling = false;
+        
+        // Добавляем выбранные методы (кроме вкладки "Обратное масштабирование")
         if (hasSelectedMethods.value) {
           selectedMethodsList.value.forEach(method => {
+            // Проверяем наличие метода inverse_scaling
+            if (method.method_id === 'inverse_scaling') {
+              hasInverseScaling = true;
+            }
             methods.push({
               method_id: method.method_id,
               parameters: methodConfigs[method.method_id]
@@ -542,14 +565,28 @@ export default defineComponent({
           });
         }
         
-        // Если есть параметры масштабирования, добавляем метод inverse_scaling
-        if (store.getters.hasScalingParams) {
-          methods.push({
-            method_id: 'inverse_scaling',
-            parameters: {
-              scaling_params: store.state.scalingParams
-            }
-          });
+        // Проверяем, активна ли вкладка обратного масштабирования
+        if (activeTab.value === 'inverse-scaling') {
+          if (store.getters.hasScalingParams && 
+              inverseScalingColumns.value && 
+              inverseScalingColumns.value.length > 0 && 
+              !hasInverseScaling) {
+            // Добавляем метод inverse_scaling только если он еще не добавлен
+            methods.push({
+              method_id: 'inverse_scaling',
+              parameters: {
+                columns: inverseScalingColumns.value,
+                scaling_params: store.state.scalingParams
+              }
+            });
+          }
+        }
+        
+        // Если нет ни одного метода и не выбрана вкладка обратного масштабирования, выводим сообщение
+        if (methods.length === 0) {
+          ElMessage.warning('Не выбран ни один метод предобработки');
+          isProcessing.value = false;
+          return;
         }
         
         const config = {
@@ -571,12 +608,12 @@ export default defineComponent({
         router.push('/preview');
       } catch (error) {
         console.error('Ошибка обработки:', error);
-        ElMessage.error('Не удалось запустить предобработку');
+        ElMessage.error(error.response?.data?.detail || 'Не удалось запустить предобработку');
       } finally {
         isProcessing.value = false;
       }
     };
-    
+
     // Навигация
     const goToUpload = () => {
       router.push('/upload');
@@ -734,6 +771,11 @@ export default defineComponent({
     const onScalingMetadataUpdated = (params) => {
       store.commit('setScalingParams', params);
       
+      // Сохраняем выбранные столбцы для обратного масштабирования
+      if (params.columns) {
+        inverseScalingColumns.value = params.columns;
+      }
+      
       // Определяем название метода масштабирования
       if (params.standardization && params.standardization.method) {
         const methodNames = {
@@ -754,6 +796,8 @@ export default defineComponent({
       store.commit('setResultId', data.result_id);
       router.push('/preview');
     };
+
+    const inverseScalingColumns = ref([]);
 
     return {
       datasetId,
@@ -793,7 +837,8 @@ export default defineComponent({
       isNewColumn,
       getMethodName,
       onScalingMetadataUpdated,
-      onInverseScalingApplied
+      onInverseScalingApplied,
+      inverseScalingColumns
     };
   }
 });

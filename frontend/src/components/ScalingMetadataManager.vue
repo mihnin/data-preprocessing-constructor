@@ -164,11 +164,25 @@
       
       <!-- Вкладка для обратного масштабирования -->
       <el-tab-pane label="Применить обратное преобразование" name="inverse" v-if="hasScalingParams">
-        <p>
-          Применить обратное масштабирование к выбранным столбцам.
-        </p>
+        <div class="inverse-scaling-info">
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+          >
+            <template #title>
+              Применение обратного масштабирования
+            </template>
+            <template #default>
+              <p>
+                Данная функция позволяет вернуть масштабированным данным их исходные значения.
+                Выберите столбцы, к которым нужно применить обратное масштабирование ({{ scalingMethodName }}).
+              </p>
+            </template>
+          </el-alert>
+        </div>
         
-        <el-form label-width="200px">
+        <el-form label-width="200px" style="margin-top: 20px;">
           <el-form-item label="Столбцы для преобразования:">
             <el-select 
               v-model="inverseScalingColumns" 
@@ -183,6 +197,23 @@
                 :value="column"
               />
             </el-select>
+            <div class="selection-info" v-if="getScaledColumns().length > 0">
+              <small>Выбрано {{ inverseScalingColumns.length }} из {{ getScaledColumns().length }} доступных столбцов</small>
+              <el-button 
+                type="text" 
+                @click="inverseScalingColumns = getScaledColumns()"
+                v-if="inverseScalingColumns.length < getScaledColumns().length"
+              >
+                Выбрать все
+              </el-button>
+              <el-button 
+                type="text" 
+                @click="inverseScalingColumns = []"
+                v-if="inverseScalingColumns.length > 0"
+              >
+                Очистить выбор
+              </el-button>
+            </div>
           </el-form-item>
           
           <el-form-item>
@@ -417,6 +448,19 @@ export default {
         
         // После успешного импорта активируем вкладку обратного масштабирования
         activeTab.value = 'inverse';
+        
+        // Автоматически выбираем все доступные столбцы для обратного масштабирования
+        // Получаем столбцы из параметров масштабирования
+        const scaledColumns = getScaledColumns();
+        inverseScalingColumns.value = scaledColumns;
+        
+        // Если есть столбцы, показываем уведомление
+        if (scaledColumns.length > 0) {
+          ElMessage({
+            message: `Автоматически выбрано ${scaledColumns.length} столбца(ов) для обратного масштабирования`,
+            type: 'info'
+          });
+        }
       } catch (error) {
         console.error('Ошибка импорта метаданных:', error);
         console.log("Детали ошибки:", error.response?.data || error.message);
@@ -487,18 +531,46 @@ export default {
       if (!props.hasScalingParams) return [];
       
       // Получаем список столбцов из параметров масштабирования
-      if (props.scalingParams && props.scalingParams.standardization && 
-          props.scalingParams.standardization.columns) {
-        return props.scalingParams.standardization.columns;
+      if (props.scalingParams && props.scalingParams.standardization) {
+        // Сначала проверяем поле columns
+        if (props.scalingParams.standardization.columns && 
+            Array.isArray(props.scalingParams.standardization.columns) && 
+            props.scalingParams.standardization.columns.length > 0) {
+          return props.scalingParams.standardization.columns;
+        }
+        
+        // Затем проверяем ключи в объекте params
+        if (props.scalingParams.standardization.params) {
+          return Object.keys(props.scalingParams.standardization.params);
+        }
       }
       
-      if (props.scalingParams && props.scalingParams.standardization && 
-          props.scalingParams.standardization.params) {
-        return Object.keys(props.scalingParams.standardization.params);
+      // Альтернативные форматы параметров масштабирования
+      if (props.scalingParams && props.scalingParams.mean && props.scalingParams.std) {
+        // Формат, где mean и std - это объекты с ключами-столбцами
+        const meanColumns = Object.keys(props.scalingParams.mean);
+        const stdColumns = Object.keys(props.scalingParams.std);
+        // Возвращаем пересечение (столбцы, которые есть и в mean, и в std)
+        return meanColumns.filter(col => stdColumns.includes(col));
+      }
+      
+      if (props.scalingParams && props.scalingParams.min && props.scalingParams.max) {
+        // Формат, где min и max - это объекты с ключами-столбцами
+        const minColumns = Object.keys(props.scalingParams.min);
+        const maxColumns = Object.keys(props.scalingParams.max);
+        // Возвращаем пересечение (столбцы, которые есть и в min, и в max)
+        return minColumns.filter(col => maxColumns.includes(col));
       }
       
       // Если параметры не определены явно, возвращаем все доступные столбцы
-      return props.availableColumns;
+      // но только если они числовые (если у нас есть такая информация)
+      if (props.availableColumns && props.availableColumns.length > 0) {
+        // Здесь можно было бы отфильтровать только числовые столбцы,
+        // но у нас может не быть информации о типах столбцов
+        return props.availableColumns;
+      }
+      
+      return [];
     };
     
     // Функция применения обратного масштабирования
@@ -524,14 +596,17 @@ export default {
         const scalingResponse = await preprocessingService.applyInverseScaling(requestData);
         
         ElMessage({
-          message: 'Обратное масштабирование успешно применено',
-          type: 'success'
+          message: `Обратное масштабирование успешно применено к ${inverseScalingColumns.value.length} столбцам`,
+          type: 'success',
+          duration: 5000
         });
         
         emit('inverse-scaling-applied', scalingResponse.data);
         
-        // Очищаем выбранные столбцы
-        inverseScalingColumns.value = [];
+        // Очищаем выбранные столбцы только если мы не находимся в представлении предобработки
+        if (!props.inPreprocessingView) {
+          inverseScalingColumns.value = [];
+        }
       } catch (error) {
         console.error('Ошибка при применении обратного масштабирования:', error);
         ElMessage.error(error.response?.data?.detail || 'Не удалось применить обратное масштабирование');
@@ -614,5 +689,21 @@ h5 {
   color: #409eff;
   font-size: 14px;
   font-weight: 500;
+}
+
+.inverse-scaling-info {
+  margin-bottom: 20px;
+}
+
+.selection-info {
+  margin-top: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #606266;
+}
+
+.no-scaling-params {
+  margin-bottom: 20px;
 }
 </style>

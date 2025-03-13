@@ -111,6 +111,7 @@
             :scaling-method-name="scalingMethodName"
             :available-columns="resultMetadata.columns || []"
             @metadata-updated="onMetadataUpdated"
+            @inverse-scaling-applied="onInverseScalingApplied"
           />
         </el-card>
         
@@ -123,18 +124,15 @@
               </el-button>
             </div>
           </template>
-          
           <div v-if="isPreviewLoading" class="preview-loading">
             <el-spinner></el-spinner>
             <p>Загрузка данных...</p>
           </div>
-          
           <div v-else-if="previewError" class="preview-error">
             <el-alert type="error" :closable="false">
               {{ previewError }}
             </el-alert>
           </div>
-          
           <div v-else-if="previewData && previewData.length > 0" class="preview-content">
             <el-table
               :data="previewData"
@@ -151,7 +149,6 @@
               />
             </el-table>
           </div>
-          
           <div v-else class="no-preview">
             <p>Нажмите кнопку "Загрузить предпросмотр" для просмотра обработанных данных</p>
           </div>
@@ -163,7 +160,6 @@
               <span>Экспорт обработанных данных</span>
             </div>
           </template>
-          
           <el-form label-width="200px">
             <el-form-item label="Формат экспорта:">
               <el-radio-group v-model="exportFormat">
@@ -171,7 +167,6 @@
                 <el-radio label="excel">Excel</el-radio>
               </el-radio-group>
             </el-form-item>
-            
             <el-form-item label="Параметры CSV:" v-if="exportFormat === 'csv'">
               <el-select v-model="csvDelimiter" placeholder="Разделитель" style="width: 150px">
                 <el-option label="Запятая (,)" value="," />
@@ -180,7 +175,6 @@
               </el-select>
             </el-form-item>
           </el-form>
-          
           <el-button 
             type="success" 
             icon="el-icon-download" 
@@ -214,7 +208,6 @@ export default defineComponent({
   components: {
     ScalingMetadataManager
   },
-  
   setup() {
     const router = useRouter();
     const store = useStore();
@@ -286,12 +279,10 @@ export default defineComponent({
         } else if (response.data.status === 'completed') {
           processingStatus.value = 'completed';
           resultMetadata.value = response.data.metadata;
-          
           // Останавливаем опрос при завершении
           if (statusInterval.value) {
             clearInterval(statusInterval.value);
           }
-          
           // Получение оригинальных столбцов из метаданных датасета
           try {
             const datasetResponse = await datasetService.getDatasetInfo(resultMetadata.value.dataset_id);
@@ -346,20 +337,16 @@ export default defineComponent({
       try {
         // Запрос для экспорта данных с учетом выбранного формата
         const response = await preprocessingService.exportDataset(resultId.value, exportFormat.value);
-        
         // Создание ссылки для скачивания
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement('a');
         link.href = url;
-        
         // Устанавливаем правильное расширение файла
         const fileExtension = exportFormat.value === 'excel' ? 'xlsx' : 'csv';
         link.setAttribute('download', `processed_data_${resultId.value}.${fileExtension}`);
-        
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
         ElMessage({
           message: 'Данные успешно экспортированы',
           type: 'success'
@@ -382,7 +369,6 @@ export default defineComponent({
       if (!resultMetadata.value || !resultMetadata.value.config || !resultMetadata.value.config.methods) {
         return [];
       }
-      
       return resultMetadata.value.config.methods.map(method => {
         // Получение информации о методе из метаданных
         return {
@@ -405,7 +391,6 @@ export default defineComponent({
         'rolling_statistics': 'Скользящие статистики',
         'date_components': 'Извлечение компонентов даты'
       };
-      
       return methodNames[methodId] || methodId;
     };
     
@@ -423,7 +408,6 @@ export default defineComponent({
         'n_components': 'Количество компонент',
         'components': 'Компоненты даты'
       };
-      
       return paramNames[paramName] || paramName;
     };
     
@@ -444,7 +428,6 @@ export default defineComponent({
         };
         return strategyLabels[value] || value;
       }
-      
       // Добавляем форматирование для компонентов даты
       if (paramName === 'components') {
         if (Array.isArray(value)) {
@@ -456,17 +439,14 @@ export default defineComponent({
             'day_of_week': 'День недели',
             'day_of_month': 'День месяца',
             'day_of_year': 'День года',
-            'week_of_year': 'Неделя года'
+            'week_of_year': 'Неделя года',
           };
-          
           return value.map(component => componentLabels[component] || component).join(', ');
         }
       }
-      
       if (Array.isArray(value)) {
         return value.length > 0 ? value.join(', ') : 'Не выбрано';
       }
-      
       return value === null || value === undefined ? 'Не указано' : value;
     };
     
@@ -481,7 +461,6 @@ export default defineComponent({
         'completed': 'Обработка завершена',
         'error': 'Ошибка при обработке'
       };
-      
       return stageTitles[stage] || 'Выполняется обработка данных...';
     };
     
@@ -498,13 +477,17 @@ export default defineComponent({
     
     // Проверка наличия параметров масштабирования
     const hasScalingParams = computed(() => {
-      if (!resultMetadata.value || !resultMetadata.value.config || !resultMetadata.value.config.methods) {
-        return false;
+      // Проверяем прямое наличие scaling_params в метаданных
+      if (resultMetadata.value && resultMetadata.value.scaling_params) {
+        return true;
       }
-      
-      return resultMetadata.value.config.methods.some(method => 
-        ['standardization', 'minmax_scaling', 'normalization'].includes(method.method_id)
-      );
+      // Проверяем наличие методов масштабирования в примененных методах
+      if (resultMetadata.value && resultMetadata.value.config && resultMetadata.value.config.methods) {
+        return resultMetadata.value.config.methods.some(method => 
+          ['standardization', 'minmax_scaling', 'normalization'].includes(method.method_id)
+        );
+      }
+      return false;
     });
     
     // Получение названия метода масштабирования
@@ -512,11 +495,9 @@ export default defineComponent({
       if (!resultMetadata.value || !resultMetadata.value.config || !resultMetadata.value.config.methods) {
         return '';
       }
-      
       const scalingMethod = resultMetadata.value.config.methods.find(method => 
         ['standardization', 'minmax_scaling', 'normalization'].includes(method.method_id)
       );
-      
       if (!scalingMethod) return '';
       
       const methodNames = {
@@ -524,19 +505,14 @@ export default defineComponent({
         'minmax_scaling': 'Мин-макс нормализация',
         'normalization': 'Нормализация'
       };
-      
       return methodNames[scalingMethod.method_id] || scalingMethod.method_id;
     });
     
     // Обработчик события обновления метаданных
     const onMetadataUpdated = (scalingParams) => {
-      // Обновляем локальное состояние
-      // Примечание: поскольку hasScalingParams является computed,
-      // мы не можем изменить его напрямую, но обновление данных
-      // приведет к пересчету этого свойства
-      
+      console.log('Обновление параметров масштабирования:', scalingParams);
       // Обновляем метаданные результата, добавляя информацию о масштабировании
-      if (resultMetadata.value && scalingParams) {
+      if (resultMetadata.value) {
         if (!resultMetadata.value.scaling_params) {
           resultMetadata.value = {
             ...resultMetadata.value,
@@ -545,19 +521,39 @@ export default defineComponent({
         } else {
           resultMetadata.value.scaling_params = scalingParams;
         }
+        // Важно! Сохраняем параметры масштабирования в хранилище
+        store.dispatch('setScalingParams', scalingParams);
       }
-      
       // Обновляем предпросмотр данных, если он загружен
       if (previewData.value) {
         loadDataPreview();
       }
-      
       ElMessage({
         message: 'Параметры масштабирования обновлены',
         type: 'success'
       });
     };
-    
+
+    // Обработчик события применения обратного масштабирования
+    const onInverseScalingApplied = (data) => {
+      console.log('Результат обратного масштабирования:', data);
+      
+      // Обновляем ID результата
+      if (data && data.result_id) {
+        store.dispatch('setResult', data.result_id);
+        // Обновляем текущий resultId для обновления представления
+        resultId.value = data.result_id;
+        // Сбрасываем состояние и перезагружаем данные
+        checkStatus();
+      }
+      
+      ElMessage({
+        message: 'Обратное масштабирование успешно применено. Результаты обновлены.',
+        type: 'success',
+        duration: 5000
+      });
+    };
+
     return {
       resultId,
       processingStatus,
@@ -583,9 +579,10 @@ export default defineComponent({
       finishProcess,
       hasScalingParams,
       scalingMethodName,
-      onMetadataUpdated
+      onMetadataUpdated,
+      onInverseScalingApplied
     };
-  }
+  },
 });
 </script>
 
@@ -610,6 +607,7 @@ export default defineComponent({
 }
 
 .result-container {
+  margin-top: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -675,19 +673,10 @@ export default defineComponent({
 .cell-content {
   display: inline-block;
   max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.new-column {
-  color: #67c23a;
   font-weight: bold;
-}
-
-.pagination-container {
-  margin-top: 20px;
-  display: flex;
-  justify-content: center;
+  color: #67c23a;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 </style>
