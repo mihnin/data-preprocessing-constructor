@@ -175,35 +175,6 @@
             </el-alert>
           </div>
         </div>
-        
-        <!-- Заменяем секцию управления параметрами масштабирования -->
-        <el-divider v-if="analysisResult"></el-divider>
-        <div v-if="analysisResult" class="scaling-section">
-          <h3>Управление параметрами масштабирования</h3>
-          <p>Если данные были ранее масштабированы, вы можете указать параметры для обратного преобразования.</p>
-          
-          <ScalingMetadataManager
-            mode="dataset"
-            :dataset-id="analysisResult.dataset_id"
-            :result-id="null"
-            :has-scaling-params="hasScalingParams"
-            :scaling-method-name="scalingMethodName"
-            :available-columns="analysisResult.columns.map(c => c.name)"
-            @metadata-updated="onScalingMetadataUpdated"
-            @inverse-scaling-applied="onInverseScalingApplied"
-          />
-          
-          <!-- Кнопка для прямого применения обратного масштабирования -->
-          <div v-if="hasScalingParams" class="direct-action-buttons">
-            <el-button 
-              type="success" 
-              @click="applyDirectInverseScaling"
-              :disabled="isDirectProcessing"
-            >
-              {{ isDirectProcessing ? 'Обработка...' : 'Выполнить обратное масштабирование' }}
-            </el-button>
-          </div>
-        </div>
       </div>
       
       <template #footer>
@@ -223,16 +194,10 @@ import { defineComponent, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import datasetService from '@/services/datasetService';
-import preprocessingService from '@/services/preprocessingService';
 import { ElMessage } from 'element-plus';
-import ScalingMetadataManager from '@/components/ScalingMetadataManager.vue';
 
 export default defineComponent({
   name: 'DataUploadView',
-  
-  components: {
-    ScalingMetadataManager
-  },
   
   setup() {
     const router = useRouter();
@@ -471,179 +436,10 @@ export default defineComponent({
       }
     };
     
-    // Добавляем состояние для параметров масштабирования
-    const scalingParams = ref(null);
-    const hasScalingParams = ref(false);
-    const isDirectProcessing = ref(false);
-    
     // Вычисляемое свойство для активации кнопки
     const canProceed = computed(() => {
       return true; // Всегда активна, можно добавить дополнительные условия
     });
-    
-    // Обработчик обновления метаданных масштабирования
-    const onMetadataUpdated = (params) => {
-      scalingParams.value = params;
-      hasScalingParams.value = true;
-      
-      ElMessage({
-        message: 'Параметры масштабирования успешно загружены',
-        type: 'success'
-      });
-      
-      // Сохраняем параметры в хранилище
-      store.commit('setScalingParams', params);
-    };
-    
-    // Функция для прямого применения обратного масштабирования
-    const directProcess = async () => {
-      if (!scalingParams.value || !analysisResult.value?.dataset_id) return;
-      
-      isDirectProcessing.value = true;
-      
-      try {
-        // Создаем конфигурацию обработки только с масштабированием
-        const config = {
-          dataset_id: analysisResult.value.dataset_id,
-          methods: [{
-            method_id: 'inverse_scaling',
-            parameters: {
-              scaling_params: scalingParams.value
-            }
-          }]
-        };
-        
-        const response = await preprocessingService.executePreprocessing(config);
-        
-        // Сохраняем ID результата в хранилище
-        store.commit('setResultId', response.data.result_id);
-        
-        ElMessage({
-          message: 'Обратное масштабирование запущено успешно',
-          type: 'success'
-        });
-        
-        // Переходим к результатам
-        router.push('/preview');
-      } catch (error) {
-        console.error('Ошибка обработки:', error);
-        ElMessage.error('Не удалось запустить обратное масштабирование');
-      } finally {
-        isDirectProcessing.value = false;
-      }
-    };
-    
-    // Модифицируем состояние для параметров масштабирования
-    const scalingMethodName = ref('');
-    
-    // Обновляем обработчик обновления метаданных масштабирования
-    const onScalingMetadataUpdated = (params) => {
-      scalingParams.value = params;
-      hasScalingParams.value = true;
-      
-      // Log the parameters to make sure they're structured correctly
-      console.log('Updated scaling parameters:', params);
-      
-      // Определяем название метода масштабирования
-      if (params.standardization && params.standardization.method) {
-        const methodNames = {
-          'standard': 'Стандартизация',
-          'minmax': 'Мин-макс нормализация'
-        };
-        scalingMethodName.value = methodNames[params.standardization.method] || params.standardization.method;
-      }
-      
-      ElMessage({
-        message: 'Параметры масштабирования успешно загружены',
-        type: 'success'
-      });
-      
-      // Сохраняем параметры в хранилище
-      store.commit('setScalingParams', params);
-      
-      // Make the inverse scaling button visible and highlighted
-      setTimeout(() => {
-        const button = document.querySelector('.direct-action-buttons .el-button');
-        if (button) {
-          button.classList.add('highlight-button');
-          setTimeout(() => {
-            button.classList.remove('highlight-button');
-          }, 3000);
-        }
-      }, 500);
-    };
-    
-    // Обработчик применения обратного масштабирования
-    const onInverseScalingApplied = (data) => {
-      // Сохраняем ID результата и переходим к просмотру
-      store.commit('setResultId', data.result_id);
-      router.push('/preview');
-    };
-    
-    // Функция для прямого применения обратного масштабирования
-    const applyDirectInverseScaling = async () => {
-      if (!scalingParams.value || !analysisResult.value?.dataset_id) {
-        ElMessage.warning('Необходимы параметры масштабирования и ID набора данных');
-        return;
-      }
-      
-      isDirectProcessing.value = true;
-      
-      try {
-        // Определим столбцы из параметров масштабирования
-        let columns = [];
-        
-        // Проверим разные возможные структуры scalingParams
-        if (scalingParams.value.standardization?.columns) {
-          columns = scalingParams.value.standardization.columns;
-        } else if (scalingParams.value.columns) {
-          columns = scalingParams.value.columns;
-        } else if (scalingParams.value.standardization?.params) {
-          // Если есть параметры, возьмём их ключи как имена столбцов
-          columns = Object.keys(scalingParams.value.standardization.params);
-        } else if (scalingParams.value.parameters) {
-          // Если есть параметры, возьмём их ключи как имена столбцов
-          columns = Object.keys(scalingParams.value.parameters);
-        }
-        
-        // Проверяем наличие столбцов перед отправкой запроса
-        if (columns.length === 0) {
-          ElMessage.error('Не удалось определить столбцы для обратного масштабирования');
-          isDirectProcessing.value = false;
-          return;
-        }
-        
-        console.log('Applying inverse scaling with params:', {
-          dataset_id: analysisResult.value.dataset_id,
-          columns: columns,
-          scaling_params: scalingParams.value
-        });
-        
-        const response = await preprocessingService.applyInverseScalingToDataset(
-          analysisResult.value.dataset_id,
-          {
-            columns: columns,
-            scaling_params: scalingParams.value
-          }
-        );
-        
-        // Сохраняем ID результата в хранилище
-        store.commit('setResultId', response.data.result_id);
-        
-        ElMessage({
-          message: 'Обратное масштабирование успешно применено',
-          type: 'success'
-        });
-        
-        // Переходим к просмотру результата
-        router.push('/preview');
-      } catch (error) {
-        console.error('Ошибка обратного масштабирования:', error);
-        ElMessage.error(error.response?.data?.detail || 'Не удалось применить обратное масштабирование');
-      } finally {
-        isDirectProcessing.value = false;
-      }
-    };
     
     return {
       selectedFile,
@@ -673,17 +469,7 @@ export default defineComponent({
       settingTarget,
       targetSetSuccess,
       setTargetColumn,
-      // Добавляем новые переменные и функции
-      scalingParams,
-      hasScalingParams,
-      isDirectProcessing,
-      canProceed,
-      onMetadataUpdated,
-      directProcess,
-      scalingMethodName,
-      onScalingMetadataUpdated,
-      onInverseScalingApplied,
-      applyDirectInverseScaling
+      canProceed
     };
   }
 });
@@ -761,35 +547,5 @@ export default defineComponent({
 
 .target-success {
   margin-top: 15px;
-}
-
-.scaling-section {
-  margin-top: 20px;
-  padding: 15px;
-  background-color: #f0f9eb;
-  border-radius: 4px;
-  border: 1px solid #e6f1fc;
-}
-
-.direct-action-buttons {
-  margin-top: 20px;
-  display: flex;
-  justify-content: center;
-}
-
-.highlight-button {
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(64, 158, 255, 0.7);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(64, 158, 255, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(64, 158, 255, 0);
-  }
 }
 </style>

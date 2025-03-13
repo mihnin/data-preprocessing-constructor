@@ -91,6 +91,22 @@
             </div>
           </el-card>
         </el-tab-pane>
+        
+        <el-tab-pane label="Обратное масштабирование" name="inverse-scaling">
+          <el-card class="method-list">
+            <ScalingMetadataManager
+              mode="dataset"
+              :dataset-id="datasetId"
+              :result-id="null"
+              :has-scaling-params="hasScalingParams"
+              :scaling-method-name="scalingMethodName"
+              :available-columns="availableColumns"
+              :in-preprocessing-view="true"
+              @metadata-updated="onScalingMetadataUpdated"
+              @inverse-scaling-applied="onInverseScalingApplied"
+            />
+          </el-card>
+        </el-tab-pane>
       </el-tabs>
       
       <!-- Информация о выбранных методах -->
@@ -301,74 +317,6 @@
         </span>
       </template>
     </el-dialog>
-
-    <!-- Карточка предпросмотра данных -->
-    <el-card class="data-preview">
-      <template #header>
-        <div class="card-header">
-          <span>Предпросмотр данных</span>
-          <el-button type="primary" @click="loadDataPreview" :loading="isPreviewLoading">
-            Загрузить предпросмотр
-          </el-button>
-        </div>
-      </template>
-      
-      <div v-if="isPreviewLoading" class="preview-loading">
-        <el-spinner></el-spinner>
-        <p>Загрузка данных...</p>
-      </div>
-      
-      <div v-else-if="previewError" class="preview-error">
-        <el-alert type="error" :closable="false">
-          {{ previewError }}
-        </el-alert>
-      </div>
-      
-      <div v-else-if="previewData && previewData.length > 0" class="preview-content">
-        <div class="table-container">
-          <el-table
-            :data="previewData"
-            border
-            style="min-width: 800px;"
-            max-height="400"
-            :default-sort="{prop: resultMetadata.columns[0], order: 'ascending'}"
-          >
-            <el-table-column
-              v-for="column in resultMetadata.columns"
-              :key="column"
-              :prop="column"
-              :label="column"
-              min-width="150"
-              sortable
-            >
-              <template #default="scope">
-                <span class="cell-content" :class="{'new-column': isNewColumn(column)}">
-                  {{ formatCellValue(scope.row[column]) }}
-                </span>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-        
-        <!-- Добавляем пагинацию -->
-        <div class="pagination-container" v-if="previewData.length > 10">
-          <el-pagination
-            :current-page="currentPage"
-            :page-sizes="[10, 20, 50, 100]"
-            :page-size="pageSize"
-            layout="total, sizes, prev, pager, next, jumper"
-            :total="totalRows"
-            @size-change="handleSizeChange"
-            @current-change="handleCurrentChange"
-          >
-          </el-pagination>
-        </div>
-      </div>
-      
-      <div v-else class="no-preview">
-        <p>Нажмите кнопку "Загрузить предпросмотр" для просмотра обработанных данных</p>
-      </div>
-    </el-card>
   </div>
 </template>
 
@@ -379,9 +327,14 @@ import { useStore } from 'vuex';
 import { ElMessage } from 'element-plus';
 import preprocessingService from '@/services/preprocessingService';
 import datasetService from '@/services/datasetService';
+import ScalingMetadataManager from '@/components/ScalingMetadataManager.vue';
 
 export default defineComponent({
   name: 'PreprocessingView',
+  
+  components: {
+    ScalingMetadataManager
+  },
   
   setup() {
     const router = useRouter();
@@ -415,69 +368,22 @@ export default defineComponent({
     const previewTab = ref('comparison');
     
     // Результат обработки
-    const resultId = computed(() => store.state.resultId);
     const resultMetadata = ref({ columns: [] });
     
     // Состояние обработки
     const isProcessing = ref(false);
 
-    // Пагинация и форматирование для таблицы предпросмотра
-    const currentPage = ref(1);
-    const pageSize = ref(20);
-    const totalRows = ref(0);
-
-    const handleSizeChange = (size) => {
-      pageSize.value = size;
-      loadDataPreview();
-    };
-
-    const handleCurrentChange = (page) => {
-      currentPage.value = page;
-      loadDataPreview();
-    };
-
-    // Функция форматирования значений в ячейках
-    const formatCellValue = (value) => {
-      if (value === null || value === undefined) {
-        return 'Н/Д';
+    // Доступные столбцы для операций
+    const availableColumns = computed(() => {
+      if (datasetInfo.value && datasetInfo.value.columns) {
+        return datasetInfo.value.columns.map(col => col.name);
       }
-      
-      if (typeof value === 'number') {
-        // Форматируем числа с учетом десятичных знаков
-        return Number.isInteger(value) ? value : value.toFixed(4);
-      }
-      
-      return value;
-    };
+      return [];
+    });
 
-    // Обновленная функция загрузки предпросмотра с учетом пагинации
-    const loadDataPreview = async () => {
-      if (!resultId.value) return;
-      
-      isPreviewLoading.value = true;
-      previewError.value = null;
-      
-      try {
-        // Передаем параметры пагинации
-        const limit = pageSize.value;
-        const offset = (currentPage.value - 1) * pageSize.value;
-        const response = await preprocessingService.getDataPreview(resultId.value, limit, offset);
-        
-        previewData.value = response.data.preview;
-        totalRows.value = response.data.total_count || previewData.value.length;
-        
-        // Обновляем метаданные результата
-        if (response.data.columns) {
-          resultMetadata.value.columns = response.data.columns;
-        }
-      } catch (error) {
-        console.error('Ошибка загрузки предпросмотра:', error);
-        previewError.value = 'Не удалось загрузить предпросмотр данных';
-      } finally {
-        isPreviewLoading.value = false;
-      }
-    };
-    
+    // Название метода масштабирования
+    const scalingMethodName = ref('');
+
     // Методы для категорий
     const generalMethods = computed(() => 
       methods.value.filter(method => 
@@ -721,49 +627,6 @@ export default defineComponent({
       return option;
     };
 
-    const formatParameterValue = (paramName, value) => {
-      // Остальной код функции...
-      if (paramName === 'strategy') {
-        const strategyLabels = {
-          'mean': 'Заполнить средним',
-          'median': 'Заполнить медианой',
-          'mode': 'Заполнить модой',
-          'drop_rows': 'Удалить строки',
-          'zscore': 'Z-оценка',
-          'iqr': 'Межквартильный размах',
-          'standard': 'Стандартизация',
-          'minmax': 'Мин-макс нормализация',
-          'onehot': 'One-Hot кодирование',
-          'label': 'Label кодирование'
-        };
-        return strategyLabels[value] || value;
-      }
-      
-      // Добавляем форматирование для компонентов даты
-      if (paramName === 'components') {
-        if (Array.isArray(value)) {
-          // Преобразуем идентификаторы компонентов в удобочитаемые названия
-          const componentLabels = {
-            'year': 'Год',
-            'month': 'Месяц',
-            'quarter': 'Квартал',
-            'day_of_week': 'День недели',
-            'day_of_month': 'День месяца',
-            'day_of_year': 'День года',
-            'week_of_year': 'Неделя года'
-          };
-          
-          return value.map(component => componentLabels[component] || component).join(', ');
-        }
-      }
-      
-      if (Array.isArray(value)) {
-        return value.length > 0 ? value.join(', ') : 'Не выбрано';
-      }
-      
-      return value === null || value === undefined ? 'Не указано' : value;
-    };
-
     const getOptionsForParam = (param, paramName) => {
       if (param.type === 'select' && param.options) {
         return param.options.map(option => ({
@@ -819,10 +682,77 @@ export default defineComponent({
       return summaryParts.join(', ') || 'Настройки по умолчанию';
     };
     
+    const formatParameterValue = (paramName, value) => {
+      if (paramName === 'strategy') {
+        const strategyLabels = {
+          'mean': 'Заполнить средним',
+          'median': 'Заполнить медианой',
+          'mode': 'Заполнить модой',
+          'drop_rows': 'Удалить строки',
+          'zscore': 'Z-оценка',
+          'iqr': 'Межквартильный размах',
+          'standard': 'Стандартизация',
+          'minmax': 'Мин-макс нормализация',
+          'onehot': 'One-Hot кодирование',
+          'label': 'Label кодирование'
+        };
+        return strategyLabels[value] || value;
+      }
+      
+      // Добавляем форматирование для компонентов даты
+      if (paramName === 'components') {
+        if (Array.isArray(value)) {
+          // Преобразуем идентификаторы компонентов в удобочитаемые названия
+          const componentLabels = {
+            'year': 'Год',
+            'month': 'Месяц',
+            'quarter': 'Квартал',
+            'day_of_week': 'День недели',
+            'day_of_month': 'День месяца',
+            'day_of_year': 'День года',
+            'week_of_year': 'Неделя года'
+          };
+          
+          return value.map(component => componentLabels[component] || component).join(', ');
+        }
+      }
+      
+      if (Array.isArray(value)) {
+        return value.length > 0 ? value.join(', ') : 'Не выбрано';
+      }
+      
+      return value === null || value === undefined ? 'Не указано' : value;
+    };
+    
     // Проверка, является ли столбец новым
     const isNewColumn = (column) => {
       if (!previewData.value || !previewData.value.original_columns) return false;
       return !previewData.value.original_columns.includes(column);
+    };
+
+    // Обработчики для компонента ScalingMetadataManager
+    const onScalingMetadataUpdated = (params) => {
+      store.commit('setScalingParams', params);
+      
+      // Определяем название метода масштабирования
+      if (params.standardization && params.standardization.method) {
+        const methodNames = {
+          'standard': 'Стандартизация',
+          'minmax': 'Мин-макс нормализация'
+        };
+        scalingMethodName.value = methodNames[params.standardization.method] || params.standardization.method;
+      }
+      
+      ElMessage({
+        message: 'Параметры масштабирования успешно загружены',
+        type: 'success'
+      });
+    };
+    
+    const onInverseScalingApplied = (data) => {
+      // Сохраняем ID результата и переходим к просмотру
+      store.commit('setResultId', data.result_id);
+      router.push('/preview');
     };
 
     return {
@@ -843,7 +773,11 @@ export default defineComponent({
       previewError,
       previewTab,
       isProcessing,
-      resultMetadata, // Added resultMetadata to the return object
+      resultMetadata,
+      availableColumns,
+      scalingParams,
+      hasScalingParams,
+      scalingMethodName,
       handleMethodSelection,
       configureMethod,
       saveMethodConfig,
@@ -855,18 +789,11 @@ export default defineComponent({
       formatOptionLabel,
       getOptionsForParam,
       getParametersSummary,
+      formatParameterValue,
       isNewColumn,
       getMethodName,
-      // Добавляем новые переменные
-      scalingParams,
-      hasScalingParams,
-      loadDataPreview,
-      formatCellValue,
-      currentPage,
-      pageSize,
-      totalRows,
-      handleSizeChange,
-      handleCurrentChange
+      onScalingMetadataUpdated,
+      onInverseScalingApplied
     };
   }
 });
@@ -968,34 +895,5 @@ export default defineComponent({
 
 .column-tag {
   margin: 5px;
-}
-
-.data-preview {
-  margin-top: 20px;
-}
-
-.table-container {
-  overflow-x: auto;
-}
-
-.cell-content {
-  display: inline-block;
-  padding: 5px;
-}
-
-.new-column {
-  font-weight: bold;
-  color: #409EFF;
-}
-
-.pagination-container {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-}
-
-.no-preview {
-  text-align: center;
-  padding: 20px;
 }
 </style>
