@@ -416,6 +416,10 @@ export default defineComponent({
     
     // Результат обработки
     const resultId = computed(() => store.state.resultId);
+    const resultMetadata = ref({ columns: [] });
+    
+    // Состояние обработки
+    const isProcessing = ref(false);
 
     // Пагинация и форматирование для таблицы предпросмотра
     const currentPage = ref(1);
@@ -461,6 +465,11 @@ export default defineComponent({
         
         previewData.value = response.data.preview;
         totalRows.value = response.data.total_count || previewData.value.length;
+        
+        // Обновляем метаданные результата
+        if (response.data.columns) {
+          resultMetadata.value.columns = response.data.columns;
+        }
       } catch (error) {
         console.error('Ошибка загрузки предпросмотра:', error);
         previewError.value = 'Не удалось загрузить предпросмотр данных';
@@ -536,6 +545,11 @@ export default defineComponent({
       currentMethod.value = method;
       showConfigDialog.value = true;
       
+      // Если у нас нет инициализированной конфигурации для этого метода, создаем ее
+      if (!methodConfigs[method.method_id]) {
+        methodConfigs[method.method_id] = {};
+      }
+      
       // Если метод - обратное масштабирование и уже есть параметры масштабирования
       if (method.method_id === 'inverse_scaling' && scalingParams.value) {
         // Инициализируем метод с существующими параметрами
@@ -543,6 +557,15 @@ export default defineComponent({
           scaling_params: scalingParams.value
         };
       } else {
+        // Инициализируем параметры значениями по умолчанию, если они не заданы
+        Object.entries(method.parameters).forEach(([paramName, paramConfig]) => {
+          if (methodConfigs[method.method_id][paramName] === undefined) {
+            methodConfigs[method.method_id][paramName] = paramConfig.default !== undefined 
+              ? paramConfig.default 
+              : (paramConfig.type === 'multiselect' ? [] : null);
+          }
+        });
+        
         // Автоматически заполняем целевую переменную, если она уже выбрана
         if (datasetInfo.value && datasetInfo.value.target_column) {
           const hasTargetParam = Object.keys(method.parameters).includes('target_column');
@@ -798,47 +821,10 @@ export default defineComponent({
     
     // Проверка, является ли столбец новым
     const isNewColumn = (column) => {
+      if (!previewData.value || !previewData.value.original_columns) return false;
       return !previewData.value.original_columns.includes(column);
     };
 
-    // Загрузка предпросмотра данных
-    const loadDataPreview = async () => {
-      isPreviewLoading.value = true;
-      previewError.value = null;
-      previewData.value = null;
-      
-      try {
-        const response = await preprocessingService.getDataPreview(datasetId.value);
-        previewData.value = response.data;
-      } catch (error) {
-        console.error('Ошибка загрузки предпросмотра данных:', error);
-        previewError.value = error.response?.data?.detail || 'Не удалось загрузить предпросмотр данных';
-      } finally {
-        isPreviewLoading.value = false;
-      }
-    };
-
-    // Форматирование значения ячейки
-    const formatCellValue = (value) => {
-      if (value === null || value === undefined) {
-        return 'N/A';
-      }
-      return value;
-    };
-
-    // Пагинация
-    const currentPage = ref(1);
-    const pageSize = ref(10);
-    const totalRows = computed(() => previewData.value ? previewData.value.length : 0);
-    
-    const handleSizeChange = (size) => {
-      pageSize.value = size;
-    };
-    
-    const handleCurrentChange = (page) => {
-      currentPage.value = page;
-    };
-    
     return {
       datasetId,
       methods,
@@ -857,6 +843,7 @@ export default defineComponent({
       previewError,
       previewTab,
       isProcessing,
+      resultMetadata, // Added resultMetadata to the return object
       handleMethodSelection,
       configureMethod,
       saveMethodConfig,
