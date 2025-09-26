@@ -1,7 +1,7 @@
 <template>
   <div class="data-upload">
-    <h1>Загрузка данных</h1>
-    
+    <h1>Data Upload</h1>
+
     <el-card class="upload-card">
       <div class="upload-area" @dragover.prevent @drop.prevent="onDrop">
         <el-upload
@@ -14,58 +14,36 @@
         >
           <i class="el-icon-upload"></i>
           <div class="el-upload__text">
-            Перетащите файл сюда или <em>нажмите для выбора</em>
+            Drag file here or <em>click to select</em>
           </div>
           <div class="el-upload__tip">
-            Поддерживаются файлы CSV и Excel до 1 млн строк
+            CSV and Excel files up to 1 million rows are supported.
           </div>
         </el-upload>
       </div>
 
       <div v-if="selectedFile" class="file-info">
-        <h3>Выбранный файл: {{ selectedFile.name }}</h3>
-        <p>Размер: {{ formatFileSize(selectedFile.size) }}</p>
-      </div>
-      
-      <div class="upload-options" v-if="selectedFile">
-        <h3>Параметры загрузки</h3>
-        
-        <el-form label-width="150px">
-          <el-form-item label="Разделитель (CSV):" v-if="isCSV">
-            <el-select v-model="delimiter" placeholder="Выберите разделитель">
-              <el-option label="Запятая (,)" value="," />
-              <el-option label="Точка с запятой (;)" value=";" />
-              <el-option label="Табуляция" value="\t" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="Кодировка:">
-            <el-select v-model="encoding" placeholder="Выберите кодировку">
-              <el-option label="UTF-8" value="utf-8" />
-              <el-option label="Windows-1251" value="windows-1251" />
-              <el-option label="ISO-8859-1" value="iso-8859-1" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="Заголовки:">
-            <el-checkbox v-model="hasHeader">Первая строка содержит заголовки</el-checkbox>
-          </el-form-item>
-        </el-form>
+        <h3>Selected File: {{ selectedFile.name }}</h3>
+        <p>Size: {{ formatFileSize(selectedFile.size) }}</p>
       </div>
     </el-card>
-    
+
     <div class="action-buttons">
-      <el-button type="primary" @click="uploadFile" :disabled="!selectedFile || isUploading">
+      <el-button
+        type="primary"
+        @click="uploadFile"
+        :disabled="!selectedFile || isUploading"
+      >
         <i class="el-icon-upload" v-if="!isUploading"></i>
         <i class="el-icon-loading" v-else></i>
-        {{ isUploading ? 'Загрузка...' : 'Загрузить' }}
+        {{ isUploading ? "Uploading..." : "Upload" }}
       </el-button>
-      <el-button @click="resetForm">Отмена</el-button>
+      <el-button @click="resetForm">Cancel</el-button>
     </div>
-    
-    <!-- Отображение прогресса загрузки и анализа -->
+
+    <!-- Data Analysis Dialog -->
     <el-dialog
-      title="Анализ данных"
+      title="Data Analysis"
       v-model="showAnalysisDialog"
       width="70%"
       :close-on-click-modal="false"
@@ -74,13 +52,16 @@
     >
       <div v-if="isAnalyzing">
         <div class="analysis-progress">
-          <el-progress :percentage="analysisProgress" :format="progressFormat"></el-progress>
+          <el-progress
+            :percentage="analysisProgress"
+            :format="progressFormat"
+          ></el-progress>
           <p>{{ analysisStatus }}</p>
         </div>
       </div>
       <div v-else-if="analysisError">
         <el-alert
-          title="Ошибка анализа данных"
+          title="Data Analysis Error"
           type="error"
           :description="analysisError"
           show-icon
@@ -88,60 +69,77 @@
         </el-alert>
       </div>
       <div v-else-if="analysisResult">
-        <h3>Анализ успешно завершен</h3>
-        <p>Строк: {{ analysisResult.row_count }}, Столбцов: {{ analysisResult.column_count }}</p>
-        
-        <h4>Рекомендуемые методы предобработки:</h4>
-        <el-tag 
-          v-for="method in analysisResult.recommended_methods" 
+        <h3>Analysis Completed Successfully</h3>
+        <p>
+          Rows: {{ analysisResult.row_count }}, Columns:
+          {{ analysisResult.column_count }}
+        </p>
+
+        <h4>Recommended Preprocessing Methods:</h4>
+        <el-tag
+          v-for="method in analysisResult.recommended_methods"
           :key="method"
           class="method-tag"
         >
           {{ getMethodName(method) }}
         </el-tag>
-        
-        <el-table :data="analysisResult.columns" style="width: 100%; margin-top: 20px;">
-          <el-table-column prop="name" label="Название столбца" width="180"></el-table-column>
-          
-          <!-- Обновленная колонка для типа данных с возможностью изменения -->
-          <el-table-column label="Тип данных" width="180">
+
+        <el-table
+          :data="analysisResult.columns"
+          style="width: 100%; margin-top: 20px"
+        >
+          <el-table-column
+            prop="name"
+            label="Column Name"
+            width="180"
+          ></el-table-column>
+
+          <el-table-column label="Data Type" width="180">
             <template #default="scope">
-              <el-select 
-                v-model="scope.row.type" 
-                size="small" 
+              <el-select
+                v-model="scope.row.type"
+                size="small"
                 @change="updateColumnType(scope.row)"
               >
-                <el-option label="Числовой" value="numeric"></el-option>
-                <el-option label="Категориальный" value="categorical"></el-option>
-                <el-option label="Дата/время" value="datetime"></el-option>
+                <el-option label="Numeric" value="numeric"></el-option>
+                <el-option label="Categorical" value="categorical"></el-option>
+                <el-option label="Datetime" value="datetime"></el-option>
               </el-select>
             </template>
           </el-table-column>
-          
-          <el-table-column prop="missing_count" label="Пропуски" width="100"></el-table-column>
-          <el-table-column prop="unique_count" label="Уникальные" width="100"></el-table-column>
-          <el-table-column label="Статистика">
+
+          <el-table-column
+            prop="missing_count"
+            label="Missing"
+            width="100"
+          ></el-table-column>
+          <el-table-column
+            prop="unique_count"
+            label="Unique"
+            width="100"
+          ></el-table-column>
+          <el-table-column label="Statistics">
             <template #default="scope">
               <div v-if="scope.row.type === 'numeric'">
-                Мин: {{ scope.row.min_value?.toFixed(2) }}, 
-                Макс: {{ scope.row.max_value?.toFixed(2) }}, 
-                Среднее: {{ scope.row.mean_value?.toFixed(2) }}
+                Min: {{ scope.row.min_value?.toFixed(2) }}, Max:
+                {{ scope.row.max_value?.toFixed(2) }}, Mean:
+                {{ scope.row.mean_value?.toFixed(2) }}
               </div>
               <div v-else-if="scope.row.is_time_series">
-                <el-tag size="small" type="success">Временной ряд</el-tag>
+                <el-tag size="small" type="success">Time Series</el-tag>
               </div>
             </template>
           </el-table-column>
         </el-table>
-        
+
         <el-divider v-if="analysisResult"></el-divider>
 
         <div v-if="analysisResult" class="target-selection">
-          <h4>Выберите целевую переменную:</h4>
+          <h4>Select Target Variable:</h4>
           <div class="target-selection-content">
-            <el-select 
-              v-model="selectedTargetColumn" 
-              placeholder="Выберите целевую переменную"
+            <el-select
+              v-model="selectedTargetColumn"
+              placeholder="Select target variable"
               class="target-select"
             >
               <el-option
@@ -154,20 +152,20 @@
                 <span class="column-type">({{ column.type }})</span>
               </el-option>
             </el-select>
-            
-            <el-button 
-              type="primary" 
-              @click="setTargetColumn" 
+
+            <el-button
+              type="primary"
+              @click="setTargetColumn"
               :disabled="!selectedTargetColumn || settingTarget"
               :loading="settingTarget"
             >
-              Установить как целевую
+              Set as Target
             </el-button>
           </div>
-          
+
           <div v-if="targetSetSuccess" class="target-success">
             <el-alert
-              title="Целевая переменная успешно установлена"
+              title="Target variable has been set successfully."
               type="success"
               show-icon
               :closable="false"
@@ -176,12 +174,18 @@
           </div>
         </div>
       </div>
-      
+
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="showAnalysisDialog = false" v-if="analysisError">Закрыть</el-button>
-          <el-button type="primary" @click="proceedToPreprocessing" v-if="analysisResult" :disabled="!canProceed">
-            Перейти к предобработке
+          <el-button @click="showAnalysisDialog = false" v-if="analysisError">
+            Close
+          </el-button>
+          <el-button
+            type="primary"
+            @click="proceedToPreprocessing"
+            v-if="analysisResult"
+          >
+            Proceed to Preprocessing
           </el-button>
         </span>
       </template>
@@ -190,271 +194,181 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import { useStore } from 'vuex';
-import datasetService from '@/services/datasetService';
-import { ElMessage } from 'element-plus';
+import { defineComponent, ref, computed } from "vue";
+import { useRouter } from "vue-router";
+import { useStore } from "vuex";
+import datasetService from "@/services/datasetService";
+import { ElMessage } from "element-plus";
 
 export default defineComponent({
-  name: 'DataUploadView',
-  
+  name: "DataUploadView",
+
   setup() {
     const router = useRouter();
     const store = useStore();
-    
-    // Состояние файла
+
+    // File state
     const selectedFile = ref(null);
-    const isCSV = computed(() => {
-      if (!selectedFile.value) return false;
-      return selectedFile.value.name.toLowerCase().endsWith('.csv');
-    });
-    
-    // Параметры загрузки
-    const delimiter = ref(',');
-    const encoding = ref('utf-8');
-    const hasHeader = ref(true);
-    
-    // Состояние загрузки
     const isUploading = ref(false);
-    const uploadProgress = ref(0);
-    
-    // Состояние анализа
+
+    // Analysis state
     const showAnalysisDialog = ref(false);
     const isAnalyzing = ref(false);
     const analysisProgress = ref(0);
-    const analysisStatus = ref('');
+    const analysisStatus = ref("");
     const analysisResult = ref(null);
     const analysisError = ref(null);
-    
-    // Методы обработки файла
+
+    // Target variable state
+    const selectedTargetColumn = ref(null);
+    const settingTarget = ref(false);
+    const targetSetSuccess = ref(false);
+
+    // --- File Handling ---
     const handleFileChange = (file) => {
       selectedFile.value = file.raw;
     };
-    
+
     const onDrop = (e) => {
       e.preventDefault();
       if (e.dataTransfer.files.length > 0) {
         selectedFile.value = e.dataTransfer.files[0];
       }
     };
-    
+
     const formatFileSize = (bytes) => {
-      if (bytes === 0) return '0 Bytes';
+      if (bytes === 0) return "0 Bytes";
       const k = 1024;
-      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const sizes = ["Bytes", "KB", "MB", "GB"];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
-    
+
     const resetForm = () => {
       selectedFile.value = null;
-      delimiter.value = ',';
-      encoding.value = 'utf-8';
-      hasHeader.value = true;
-      uploadProgress.value = 0;
       analysisResult.value = null;
       analysisError.value = null;
     };
-    
-    const progressFormat = (percentage) => {
-      return percentage === 100 ? 'Завершено' : `${percentage}%`;
-    };
-    
-    // Функция загрузки файла
+
+    // --- Main Upload Logic ---
     const uploadFile = async () => {
       if (!selectedFile.value) return;
-      
+
       try {
         isUploading.value = true;
         showAnalysisDialog.value = true;
         isAnalyzing.value = true;
-        analysisStatus.value = 'Загрузка файла...';
+        analysisStatus.value = "Uploading file...";
         analysisProgress.value = 10;
-        
-        // Создаем FormData для загрузки файла
+
         const formData = new FormData();
-        formData.append('file', selectedFile.value);
-        
-        // Добавляем параметры
-        if (isCSV.value) {
-          formData.append('delimiter', delimiter.value);
-        }
-        formData.append('encoding', encoding.value);
-        formData.append('has_header', hasHeader.value);
-        
-        // Загружаем файл и получаем анализ
-        analysisStatus.value = 'Анализ данных...';
+        formData.append("file", selectedFile.value);
+
+        analysisStatus.value = "Analyzing data...";
         analysisProgress.value = 40;
-        
+
         const response = await datasetService.uploadDataset(formData);
-        
-        analysisStatus.value = 'Завершение анализа...';
+
+        analysisStatus.value = "Finalizing analysis...";
         analysisProgress.value = 90;
-        
-        // Небольшая задержка для лучшего UX
+
         setTimeout(() => {
           analysisResult.value = response.data;
           analysisProgress.value = 100;
           isAnalyzing.value = false;
-          
-          // Сохраняем ID набора данных в хранилище
-          store.commit('setDatasetId', response.data.dataset_id);
-          store.commit('setDatasetInfo', response.data);
-          
+          store.commit("setDatasetId", response.data.dataset_id);
+          store.commit("setDatasetInfo", response.data);
           ElMessage({
-            message: 'Анализ данных успешно завершен',
-            type: 'success'
+            message: "Data analysis completed successfully.",
+            type: "success",
           });
         }, 500);
-        
       } catch (error) {
-        console.error('Ошибка загрузки файла:', error);
-        analysisError.value = error.response?.data?.detail || 'Произошла ошибка при загрузке файла';
+        console.error("File upload error:", error);
+        analysisError.value =
+          error.response?.data?.detail || "An error occurred during upload.";
         isAnalyzing.value = false;
-        
-        ElMessage({
-          message: 'Ошибка загрузки файла',
-          type: 'error'
-        });
+        ElMessage({ message: "File upload failed.", type: "error" });
       } finally {
         isUploading.value = false;
       }
     };
-    
-    // Переход к следующему шагу
-    const proceedToPreprocessing = () => {
-      showAnalysisDialog.value = false;
-      router.push('/preprocessing');
-    };
-    
-    // Получение названия метода предобработки
+
+    // --- Analysis Dialog Logic ---
+    const progressFormat = (percentage) =>
+      percentage === 100 ? "Complete" : `${percentage}%`;
+
     const getMethodName = (methodId) => {
       const methodNames = {
-        'missing_values': 'Обработка пропущенных значений',
-        'outliers': 'Обработка выбросов',
-        'standardization': 'Стандартизация данных',
-        'categorical_encoding': 'Кодирование категориальных переменных',
-        'pca': 'Снижение размерности (PCA)',
-        'time_series_analysis': 'Анализ временных рядов',
-        'lagging': 'Лагирование переменных',
-        'rolling_statistics': 'Скользящие статистики',
-        'date_components': 'Выделение компонентов даты/времени'
+        missing_values: "Handle Missing Values",
+        outliers: "Handle Outliers",
+        standardization: "Data Standardization",
+        categorical_encoding: "Encode Categorical Variables",
+        pca: "Dimensionality Reduction (PCA)",
+        time_series_analysis: "Time Series Analysis",
+        lagging: "Lagging Variables",
+        rolling_statistics: "Rolling Statistics",
+        date_components: "Extract Date Components",
       };
-      
       return methodNames[methodId] || methodId;
     };
 
-    // Вспомогательная функция для получения понятного названия типа
-    const getColumnTypeLabel = (type) => {
-      const typeLabels = {
-        'numeric': 'Числовой',
-        'categorical': 'Категориальный',
-        'datetime': 'Дата/время'
-      };
-      return typeLabels[type] || type;
-    };
-    
-    // Функция для обновления типа столбца - обновлённая версия
-    const updateColumnType = async (column) => {
-      if (!analysisResult.value?.dataset_id) return;
-      
-      try {
-        // Если тип изменен на datetime, отмечаем как потенциальный временной ряд
-        if (column.type === "datetime") {
-          column.is_time_series = true;
-          
-          // Добавляем рекомендацию на методы для работы с временными рядами и датами
-          if (!analysisResult.value.recommended_methods.includes('date_components')) {
-            analysisResult.value.recommended_methods.push('date_components');
-          }
-          
-          if (!analysisResult.value.recommended_methods.includes('time_series_analysis')) {
-            analysisResult.value.recommended_methods.push('time_series_analysis');
-          }
-        } else {
-          // Если тип изменен с datetime на другой, убираем флаг временного ряда
-          column.is_time_series = false;
-        }
-        
-        // Обновляем локальные метаданные
-        const updatedAnalysis = {...analysisResult.value};
-        
-        // Сохраняем обновленные данные в хранилище
-        store.commit('setDatasetInfo', updatedAnalysis);
-
-        ElMessage({
-          message: `Тип столбца "${column.name}" изменен на ${getColumnTypeLabel(column.type)}`,
-          type: 'success'
-        });
-        
-      } catch (error) {
-        console.error('Ошибка обновления типа столбца:', error);
-        ElMessage.error('Не удалось обновить тип столбца');
+    const updateColumnType = (column) => {
+      // This is a simplified local update. A more robust implementation
+      // might involve an API call to re-validate on the backend.
+      if (column.type === "datetime") {
+        column.is_time_series = true; // Assume it could be a time series
+      } else {
+        column.is_time_series = false;
       }
+      store.commit("setDatasetInfo", analysisResult.value);
+      ElMessage.success(`Column type for "${column.name}" updated.`);
     };
 
-    // Состояние выбора целевой переменной
-    const selectedTargetColumn = ref(null);
-    const settingTarget = ref(false);
-    const targetSetSuccess = ref(false);
-
-    // Функция установки целевой переменной
     const setTargetColumn = async () => {
-      if (!selectedTargetColumn.value || !analysisResult.value?.dataset_id) return;
-      
+      if (!selectedTargetColumn.value || !analysisResult.value?.dataset_id)
+        return;
+
       settingTarget.value = true;
       try {
-        // Вызов API для установки целевой переменной
         await datasetService.setTargetColumn(
-          analysisResult.value.dataset_id, 
+          analysisResult.value.dataset_id,
           selectedTargetColumn.value
         );
-        
-        // Обновляем статус в локальных данных
         analysisResult.value.target_column = selectedTargetColumn.value;
-        
-        // Обновляем статус is_target во всех колонках
-        analysisResult.value.columns.forEach(col => {
+        analysisResult.value.columns.forEach((col) => {
           col.is_target = col.name === selectedTargetColumn.value;
         });
-        
-        // Сохраняем обновленные данные в хранилище
-        store.commit('setDatasetInfo', analysisResult.value);
-        
+        store.commit("setDatasetInfo", analysisResult.value);
         targetSetSuccess.value = true;
-        
-        ElMessage({
-          message: `Переменная "${selectedTargetColumn.value}" установлена как целевая`,
-          type: 'success'
-        });
+        ElMessage.success(
+          `Variable "${selectedTargetColumn.value}" set as target.`
+        );
       } catch (error) {
-        console.error('Ошибка установки целевой переменной:', error);
-        ElMessage.error('Не удалось установить целевую переменную');
+        console.error("Error setting target column:", error);
+        ElMessage.error("Failed to set target variable.");
       } finally {
         settingTarget.value = false;
       }
     };
-    
-    // Вычисляемое свойство для активации кнопки
-    const canProceed = computed(() => {
-      return true; // Всегда активна, можно добавить дополнительные условия
-    });
-    
+
+    const proceedToPreprocessing = () => {
+      showAnalysisDialog.value = false;
+      router.push("/preprocessing");
+    };
+
     return {
       selectedFile,
-      isCSV,
-      delimiter,
-      encoding,
-      hasHeader,
       isUploading,
-      uploadProgress,
       showAnalysisDialog,
       isAnalyzing,
       analysisProgress,
       analysisStatus,
       analysisResult,
       analysisError,
+      selectedTargetColumn,
+      settingTarget,
+      targetSetSuccess,
       handleFileChange,
       onDrop,
       formatFileSize,
@@ -463,15 +377,10 @@ export default defineComponent({
       proceedToPreprocessing,
       progressFormat,
       getMethodName,
-      getColumnTypeLabel,
       updateColumnType,
-      selectedTargetColumn,
-      settingTarget,
-      targetSetSuccess,
       setTargetColumn,
-      canProceed
     };
-  }
+  },
 });
 </script>
 
@@ -481,45 +390,33 @@ export default defineComponent({
   margin: 0 auto;
   padding: 20px;
 }
-
 .upload-card {
   margin-top: 20px;
 }
-
 .upload-area {
   display: flex;
   justify-content: center;
   padding: 20px;
 }
-
 .file-info {
   margin-top: 20px;
   padding: 10px;
   background-color: #f0f9eb;
   border-radius: 4px;
 }
-
-.upload-options {
-  margin-top: 20px;
-  padding: 10px;
-}
-
 .action-buttons {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
 }
-
 .analysis-progress {
   text-align: center;
   padding: 20px;
 }
-
 .method-tag {
   margin-right: 10px;
   margin-bottom: 10px;
 }
-
 .target-selection {
   margin-top: 20px;
   padding: 15px;
@@ -527,24 +424,20 @@ export default defineComponent({
   border-radius: 4px;
   border: 1px solid #e6f1fc;
 }
-
 .target-selection-content {
   display: flex;
   align-items: center;
   margin-top: 10px;
   margin-bottom: 15px;
 }
-
 .target-select {
   width: 300px;
   margin-right: 15px;
 }
-
 .column-type {
   margin-left: 10px;
   color: #909399;
 }
-
 .target-success {
   margin-top: 15px;
 }

@@ -1,19 +1,26 @@
 <template>
   <div class="header">
     <div class="header-content">
-      <h1 class="title">Конструктор предобработки данных</h1>
+      <h1 class="title">Data Preprocessing Builder</h1>
       <div class="navigation-container">
         <div class="navigation">
           <el-steps :active="activeStep" finish-status="success" simple>
-            <el-step title="Загрузка" icon="el-icon-upload"></el-step>
-            <el-step title="Предобработка" icon="el-icon-s-operation"></el-step>
-            <el-step title="Экспорт" icon="el-icon-download"></el-step>
+            <el-step title="Upload" icon="el-icon-upload"></el-step>
+            <el-step
+              title="Preprocessing"
+              icon="el-icon-s-operation"
+            ></el-step>
+            <el-step title="Export" icon="el-icon-download"></el-step>
           </el-steps>
         </div>
-        <!-- Кнопка справки теперь внутри контейнера навигации -->
         <div class="help-button">
-          <el-tooltip content="Руководство пользователя" placement="bottom">
-            <el-button type="info" icon="el-icon-question" circle @click="goToHelp"></el-button>
+          <el-tooltip content="User Guide" placement="bottom">
+            <el-button
+              type="info"
+              icon="el-icon-question"
+              circle
+              @click="goToHelp"
+            ></el-button>
           </el-tooltip>
         </div>
       </div>
@@ -23,22 +30,22 @@
 
 <script>
 export default {
-  name: 'AppHeader',
+  name: "AppHeader",
   computed: {
     activeStep() {
       const route = this.$route.path;
-      if (route.includes('preview')) return 3;
-      if (route.includes('preprocessing')) return 2;
-      if (route.includes('upload')) return 1;
+      if (route.includes("preview")) return 3;
+      if (route.includes("preprocessing")) return 2;
+      if (route.includes("upload")) return 1;
       return 0;
-    }
+    },
   },
   methods: {
     goToHelp() {
-      this.$router.push('/help');
-    }
-  }
-}
+      this.$router.push("/help");
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -82,7 +89,7 @@ export default {
   .navigation-container {
     flex-direction: column;
   }
-  
+
   .help-button {
     margin-left: 0;
     margin-top: 10px;
