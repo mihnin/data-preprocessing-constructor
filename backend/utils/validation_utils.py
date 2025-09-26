@@ -2,93 +2,68 @@ import pandas as pd
 from fastapi import HTTPException
 from pathlib import Path
 import logging
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional
 
-def validate_dataframe(df: pd.DataFrame, max_rows: int = 1000000) -> Tuple[bool, Optional[str]]:
+logger = logging.getLogger(__name__)
+
+def validate_dataframe(df: pd.DataFrame, max_rows: int = 1_000_000) -> Tuple[bool, Optional[str]]:
     """
-    Проверяет DataFrame на корректность и соответствие требованиям.
-    
+    Validates a DataFrame against a set of predefined rules.
+
     Args:
-        df: Pandas DataFrame для проверки
-        max_rows: Максимальное допустимое количество строк
-    
+        df: The pandas DataFrame to validate.
+        max_rows: The maximum number of allowed rows.
+
     Returns:
-        Tuple[bool, Optional[str]]: (успех, сообщение об ошибке)
+        A tuple containing a boolean indicating validity and an optional error message.
     """
-    # Проверка на пустой DataFrame
     if df.empty:
-        return False, "Файл не содержит данных"
-    
-    # Проверка на количество строк
+        return False, "The uploaded file is empty or could not be parsed correctly."
     if len(df) > max_rows:
-        return False, f"Превышен лимит в {max_rows} строк"
-    
-    # Проверка на количество столбцов
+        return False, f"The file exceeds the maximum row limit of {max_rows}."
     if len(df.columns) < 1:
-        return False, "Файл должен содержать хотя бы один столбец"
-    
-    # Проверка на дубликаты в заголовках
-    if len(df.columns) != len(set(df.columns)):
-        return False, "Обнаружены дубликаты в названиях столбцов"
-    
-    # Проверка на корректность данных (проверка на наличие строк с одними NaN)
+        return False, "The file must contain at least one column."
+    if df.columns.duplicated().any():
+        return False, "Duplicate column names were found in the file."
     if df.isna().all(axis=1).any():
-        return False, "Обнаружены строки, состоящие только из пропущенных значений"
-    
+        return False, "The file contains rows with all missing values."
+
     return True, None
 
-async def load_and_validate_dataframe(file_path: Path, extension: str, encoding: str = 'utf-8') -> pd.DataFrame:
+async def load_and_validate_dataframe(file_path: Path, extension: str) -> pd.DataFrame:
     """
-    Загружает и валидирует DataFrame из файла.
-    
+    Loads a DataFrame from a file and validates its structure and content.
+
     Args:
-        file_path: Путь к файлу
-        extension: Расширение файла
-        encoding: Кодировка файла (по умолчанию utf-8)
-    
+        file_path: The path to the file.
+        extension: The file's extension (csv, xlsx, etc.).
+
     Returns:
-        pd.DataFrame: Загруженный и проверенный DataFrame
-    
+        A validated pandas DataFrame.
+
     Raises:
-        HTTPException: Если файл не соответствует требованиям
+        HTTPException: If the file is invalid or cannot be processed.
     """
     try:
-        # Загружаем данные
         if extension.lower() == "csv":
-            # Пробуем разные разделители
-            separators = [',', ';', '\t', '|']
-            df = None
-            exception = None
-            
-            for sep in separators:
-                try:
-                    df = pd.read_csv(file_path, sep=sep, encoding=encoding)
-                    # Если есть только один столбец, возможно разделитель неверный
-                    if len(df.columns) > 1:
-                        break
-                except Exception as e:
-                    exception = e
-            
-            if df is None or len(df.columns) <= 1:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="Не удалось правильно прочитать CSV файл. Проверьте формат и разделитель."
-                )
-        else:  # Excel
+            # Use sep=None to let pandas auto-detect the separator
+            df = pd.read_csv(file_path, sep=None, engine='python', encoding_errors='replace')
+        elif extension.lower() in ["xlsx", "xls"]:
             df = pd.read_excel(file_path, engine='openpyxl')
-        
-        # Валидируем DataFrame
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported file extension: {extension}")
+
         is_valid, error_message = validate_dataframe(df)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_message)
         
         return df
-    
+
     except HTTPException:
-        raise
+        raise # Re-raise HTTPException to preserve status code and detail
     except Exception as e:
-        logging.error(f"Ошибка при загрузке и валидации файла: {str(e)}", exc_info=True)
+        logger.error(f"Failed to load or validate the file {file_path}: {e}", exc_info=True)
         raise HTTPException(
             status_code=500, 
-            detail=f"Ошибка при обработке файла: {str(e)}"
+            detail=f"An error occurred while processing the file: {e}"
         )
