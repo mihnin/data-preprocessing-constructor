@@ -23,8 +23,9 @@ def _analyze_column(
     # Attempt to convert object columns to datetime if possible
     if not is_datetime and not is_numeric:
         try:
-            # Using errors='raise' is faster for successful conversions
-            converted_dates = pd.to_datetime(col_series, errors='raise')
+            # Using errors='raise' is faster for successful conversions.
+            # 'mixed' format allows parsing of different datetime formats.
+            converted_dates = pd.to_datetime(col_series, errors='raise', format='mixed')
             is_datetime = True
             modified_series = converted_dates
         except (ValueError, TypeError):

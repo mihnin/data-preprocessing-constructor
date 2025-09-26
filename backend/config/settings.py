@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 from pathlib import Path
 
@@ -28,12 +28,12 @@ class AppSettings(BaseSettings):
     PROCESSED_DIR: Path = BASE_DIR / "data/processed"
     TEMP_DIR: Path = BASE_DIR / "data/temp"
 
-    class Config:
-        # This allows pydantic to read variables from a .env file
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
 
 # Instantiate the settings object for easy import across the application

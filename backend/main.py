@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,11 +29,50 @@ from utils.json_utils import NumpyJSONEncoder
 logger = setup_logging()
 settings = AppSettings()
 
+
+# --- Lifespan Events ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Manages application startup and shutdown events.
+    """
+    # Startup logic
+    logger.info("Application starting up...")
+    try:
+        for directory in [
+            settings.UPLOAD_DIR,
+            settings.PROCESSED_DIR,
+            settings.TEMP_DIR,
+        ]:
+            Path(directory).mkdir(parents=True, exist_ok=True)
+        logger.info("Application startup complete. Data directories are ready.")
+    except Exception as e:
+        logger.error(f"Error during startup directory creation: {e}", exc_info=True)
+
+    yield
+
+    # Shutdown logic
+    logger.info("Application shutting down...")
+    try:
+        temp_dir = Path(settings.TEMP_DIR)
+        if temp_dir.exists():
+            for file in temp_dir.iterdir():
+                try:
+                    file.unlink()
+                    logger.info(f"Removed temporary file: {file}")
+                except OSError as e:
+                    logger.warning(f"Failed to remove temp file {file}: {e}")
+        logger.info("Temporary files cleaned up successfully.")
+    except Exception as e:
+        logger.error(f"Error during shutdown cleanup: {e}", exc_info=True)
+
+
 app = FastAPI(
     title=settings.APP_TITLE,
     description=settings.APP_DESCRIPTION,
     version=settings.APP_VERSION,
     json_encoder=NumpyJSONEncoder,
+    lifespan=lifespan,
 )
 
 
@@ -69,38 +109,8 @@ app.include_router(
 )
 
 
-# --- Lifespan Events ---
-@app.on_event("startup")
-async def startup_event():
-    """Actions to perform on application startup: create data directories."""
-    try:
-        for directory in [
-            settings.UPLOAD_DIR,
-            settings.PROCESSED_DIR,
-            settings.TEMP_DIR,
-        ]:
-            Path(directory).mkdir(parents=True, exist_ok=True)
-        logger.info("Application startup complete. Data directories are ready.")
-    except Exception as e:
-        logger.error(f"Error during startup directory creation: {e}", exc_info=True)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Actions to perform on application shutdown: clean up temporary files."""
-    logger.info("Application shutting down...")
-    try:
-        temp_dir = Path(settings.TEMP_DIR)
-        if temp_dir.exists():
-            for file in temp_dir.iterdir():
-                try:
-                    file.unlink()
-                    logger.info(f"Removed temporary file: {file}")
-                except OSError as e:
-                    logger.warning(f"Failed to remove temp file {file}: {e}")
-        logger.info("Temporary files cleaned up successfully.")
-    except Exception as e:
-        logger.error(f"Error during shutdown cleanup: {e}", exc_info=True)
+# This space is intentionally left blank.
+# The old on_event handlers have been replaced by the lifespan manager.
 
 
 # --- Root and Health Check ---
