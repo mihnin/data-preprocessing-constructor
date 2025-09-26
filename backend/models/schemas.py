@@ -1,38 +1,38 @@
-from pydantic import BaseModel, Field, validator, root_validator
-from typing import List, Dict, Any, Optional, Union
+from pydantic import BaseModel, field_validator
+from typing import List, Dict, Any, Optional
 import re
 
-class MethodParameter(BaseModel):
-    """Модель для параметров метода в конфигурации предобработки"""
-    columns: Optional[List[str]] = None
-    strategy: Optional[str] = None
-    threshold: Optional[float] = None
-    target_column: Optional[str] = None
-    lag_periods: Optional[List[int]] = None
-    exog_columns: Optional[List[str]] = None
-    window_size: Optional[int] = None
-    statistics: Optional[List[str]] = None
-    n_components: Optional[int] = None
-
 class PreprocessingMethodConfig(BaseModel):
-    """Модель для конфигурации метода предобработки"""
+    """
+    Configuration model for a single preprocessing method.
+    """
     method_id: str
     parameters: Optional[Dict[str, Any]] = {}
 
 class PreprocessingConfig(BaseModel):
-    """Модель для конфигурации предобработки"""
+    """
+    Defines the full configuration for a preprocessing job, including the dataset
+    to use and a list of methods to apply.
+    """
     dataset_id: str
     methods: List[PreprocessingMethodConfig]
-    
-    @validator('dataset_id')
-    def validate_dataset_id(cls, v):
-        pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    @field_validator('dataset_id')
+    def validate_dataset_id(cls, v: str) -> str:
+        """
+        Ensures that the dataset_id is a valid UUID string.
+        """
+        # A simple regex for UUID format. For strict validation, a library could be used.
+        pattern = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
         if not re.match(pattern, v):
-            raise ValueError('dataset_id должен быть валидным UUID')
+            raise ValueError('dataset_id must be a valid UUID')
         return v
-    
-    @validator('methods')
-    def validate_methods(cls, v):
+
+    @field_validator('methods')
+    def validate_methods(cls, v: List[PreprocessingMethodConfig]) -> List[PreprocessingMethodConfig]:
+        """
+        Ensures that at least one preprocessing method is specified.
+        """
         if not v:
-            raise ValueError('Необходимо указать хотя бы один метод предобработки')
+            raise ValueError('At least one preprocessing method must be specified.')
         return v

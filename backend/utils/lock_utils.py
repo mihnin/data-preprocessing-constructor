@@ -1,88 +1,73 @@
-import threading
 import asyncio
-import time
-from typing import Dict, Set, Optional, Callable, Any
+from typing import Dict, Coroutine, Any
 import logging
 
-# Глобальный словарь для блокировок файлов
-file_locks: Dict[str, threading.Lock] = {}
-file_locks_lock = threading.Lock()
+logger = logging.getLogger(__name__)
 
-# Набор идентификаторов файлов, которые в данный момент обрабатываются
-processing_files: Set[str] = set()
-processing_files_lock = threading.Lock()
+# Global dictionary to store asyncio.Lock instances for each file_id
+_locks: Dict[str, asyncio.Lock] = {}
+# A lock to manage access to the global _locks dictionary itself, ensuring it's safely accessed
+_management_lock = asyncio.Lock()
 
-def get_file_lock(file_id: str) -> threading.Lock:
+async def _get_or_create_lock(file_id: str) -> asyncio.Lock:
     """
-    Получает или создает объект блокировки для указанного идентификатора файла.
-    
+    Atomically retrieves an existing asyncio.Lock or creates a new one for a given file_id.
+    This ensures that each file_id maps to a single lock instance.
+    """
+    async with _management_lock:
+        if file_id not in _locks:
+            _locks[file_id] = asyncio.Lock()
+        return _locks[file_id]
+
+async def run_with_lock(file_id: str, coro: Coroutine) -> Any:
+    """
+    Executes a coroutine while holding a file-specific lock.
+
+    This function prevents race conditions by ensuring that only one coroutine
+    can operate on a given file_id at a time.
+
     Args:
-        file_id: Идентификатор файла
-    
-    Returns:
-        threading.Lock: Объект блокировки
-    """
-    with file_locks_lock:
-        if file_id not in file_locks:
-            file_locks[file_id] = threading.Lock()
-        return file_locks[file_id]
+        file_id: The identifier for the resource to lock (e.g., a dataset ID).
+        coro: The coroutine to execute once the lock is acquired.
 
-async def with_file_lock(file_id: str, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    """
-    Выполняет функцию с блокировкой для указанного идентификатора файла.
-    
-    Args:
-        file_id: Идентификатор файла
-        func: Функция для выполнения
-        *args: Аргументы для функции
-        **kwargs: Именованные аргументы для функции
-    
     Returns:
-        Any: Результат выполнения функции
+        The result of the executed coroutine.
+
+    Raises:
+        TimeoutError: If the lock cannot be acquired within 30 seconds.
     """
-    lock = get_file_lock(file_id)
+    lock = await _get_or_create_lock(file_id)
+    logger.debug(f"Attempting to acquire lock for file_id: {file_id}")
     
-    # Пытаемся получить блокировку с таймаутом
-    acquired = False
     try:
-        # Неблокирующая попытка получить блокировку
-        acquired = lock.acquire(blocking=False)
-        if not acquired:
-            # Если не удалось получить блокировку сразу, делаем блокирующий вызов
-            # в другом потоке, чтобы не блокировать событийный цикл asyncio
-            loop = asyncio.get_event_loop()
-            acquired = await loop.run_in_executor(None, lambda: lock.acquire(blocking=True, timeout=30))
-        
-        if not acquired:
-            logging.warning(f"Не удалось получить блокировку для файла {file_id} в течение 30 секунд")
-            raise TimeoutError(f"Превышено время ожидания доступа к файлу {file_id}")
-        
-        # Помечаем файл как обрабатываемый
-        with processing_files_lock:
-            processing_files.add(file_id)
-        
-        # Выполняем функцию
-        return await func(*args, **kwargs)
-    
+        # wait_for will raise TimeoutError if the lock isn't acquired in time
+        await asyncio.wait_for(lock.acquire(), timeout=30.0)
+        logger.debug(f"Lock acquired for file_id: {file_id}")
+        # Execute the provided coroutine now that we have the lock
+        return await coro
+    except asyncio.TimeoutError:
+        logger.warning(f"Could not acquire lock for {file_id} within 30 seconds.")
+        # Re-raise as a standard TimeoutError which can be caught by exception handlers
+        raise TimeoutError(f"Timeout occurred while waiting to access file: {file_id}")
     finally:
-        # Снимаем пометку обработки
-        with processing_files_lock:
-            if file_id in processing_files:
-                processing_files.remove(file_id)
-        
-        # Освобождаем блокировку
-        if acquired:
+        if lock.locked():
             lock.release()
+            logger.debug(f"Lock released for file_id: {file_id}")
 
-def is_file_processing(file_id: str) -> bool:
+async def is_file_processing(file_id: str) -> bool:
     """
-    Проверяет, обрабатывается ли файл в данный момент.
-    
+    Asynchronously checks if a file is currently locked for processing.
+
+    This is useful for status endpoints to quickly check if an operation
+    on a file is already in progress.
+
     Args:
-        file_id: Идентификатор файла
-    
+        file_id: The identifier of the file.
+
     Returns:
-        bool: True, если файл обрабатывается
+        True if the file is currently locked, False otherwise.
     """
-    with processing_files_lock:
-        return file_id in processing_files
+    async with _management_lock:
+        lock = _locks.get(file_id)
+
+    return lock.locked() if lock else False

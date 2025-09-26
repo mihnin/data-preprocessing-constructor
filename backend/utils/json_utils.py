@@ -1,35 +1,27 @@
+import json
 import numpy as np
-import pandas as pd
-from typing import Any
 
-def convert_numpy_types(obj: Any) -> Any:
+class NumpyJSONEncoder(json.JSONEncoder):
     """
-    Рекурсивно конвертирует NumPy типы в стандартные Python типы.
-    
-    Args:
-        obj: Объект любого типа, который может содержать NumPy типы.
-        
-    Returns:
-        Объект того же типа, но с NumPy типами, преобразованными в стандартные Python типы.
+    Custom JSON encoder for NumPy data types.
+
+    This encoder handles the serialization of common NumPy types that are not
+    natively supported by Python's `json` module. It converts them to standard
+    Python types.
+    - np.integer, np.int64 -> int
+    - np.floating, np.float64 -> float (NaN and Infinity are converted to None)
+    - np.ndarray -> list
     """
-    if isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.floating):
-        # Обработка специальных значений
-        if np.isnan(obj):
-            return None
-        if np.isinf(obj):
-            return None if obj < 0 else float(1e308)  # Заменяем на большое конечное число или None
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, dict):
-        return {key: convert_numpy_types(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_numpy_types(item) for item in obj]
-    elif isinstance(obj, tuple):
-        return tuple(convert_numpy_types(item) for item in obj)
-    elif pd.isna(obj):  # Проверка на все типы NaN/None
-        return None
-    else:
-        return obj
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.int64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float64)):
+            # Handle special float values like NaN and Infinity
+            if np.isnan(obj) or np.isinf(obj):
+                return None
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+
+        # Let the base class default method raise the TypeError for other types
+        return super().default(obj)

@@ -1,163 +1,128 @@
 import sys
-import os
 from pathlib import Path
-import logging
-from logging.handlers import RotatingFileHandler
-import time
-import json
-import numpy as np
-from fastapi.encoders import jsonable_encoder
 
-# Add the parent directory to sys.path to enable absolute imports
+# Add the project root to the Python path before any other imports
+# to ensure that local modules can be found.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Depends, Request
-from fastapi.responses import FileResponse, JSONResponse
+import time
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-# Настройка логирования
-LOG_DIR = Path("./logs")
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-log_format = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+from config.logging_config import setup_logging
+from config.settings import AppSettings
+from controllers.datasets import router as datasets_router
+from controllers.preprocessing import router as preprocessing_router
+from utils.exception_handlers import (
+    general_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
 )
+from utils.json_utils import NumpyJSONEncoder
 
-# Настройка ротации логов (10 файлов по 10 МБ)
-file_handler = RotatingFileHandler(
-    LOG_DIR / "app.log", 
-    maxBytes=10*1024*1024, 
-    backupCount=10
-)
-file_handler.setFormatter(log_format)
 
-# Настройка вывода в консоль
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(log_format)
+# --- Setup ---
+logger = setup_logging()
+settings = AppSettings()
 
-# Настройка корневого логгера
-logging.basicConfig(
-    level=logging.INFO,
-    handlers=[file_handler, console_handler]
-)
-
-logger = logging.getLogger(__name__)
-
-# Определение пользовательского кодировщика JSON для обработки специальных значений NumPy
-class NumpyJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, (np.integer, np.int64)):
-            return int(obj)
-        elif isinstance(obj, (np.floating, np.float64)):
-            if np.isnan(obj) or np.isinf(obj):  # Исправлено 'или' на 'or'
-                return None
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super().default(obj)
-
-# Создание приложения FastAPI
 app = FastAPI(
-    title="Конструктор предобработки данных API",
-    description="API для анализа и предобработки наборов данных",
-    version="1.0.0",
-    json_encoder=NumpyJSONEncoder  # Добавляем собственный кодировщик
+    title=settings.APP_TITLE,
+    description=settings.APP_DESCRIPTION,
+    version=settings.APP_VERSION,
+    json_encoder=NumpyJSONEncoder,
 )
 
-# Middleware для измерения времени выполнения запросов
+
+# --- Middleware ---
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
+    """Measures the processing time for each request."""
     start_time = time.time()
     response = await call_next(request)
     process_time = time.time() - start_time
     response.headers["X-Process-Time"] = str(process_time)
     return response
 
-# Настройка CORS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # В продакшне следует указать конкретные домены
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Обработчики ошибок
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request, exc):
-    logger.error(f"HTTP ошибка: {exc.detail}", exc_info=True)
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-    )
 
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    logger.error(f"Ошибка валидации: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=422,
-        content={"detail": "Ошибка валидации данных"},
-    )
+# --- Exception Handlers ---
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
-@app.exception_handler(Exception)
-async def general_exception_handler(request, exc):
-    logger.error(f"Необработанное исключение: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Произошла внутренняя ошибка сервера"},
-    )
 
-# Импорт маршрутов
-from controllers.datasets import router as datasets_router
-from controllers.preprocessing import router as preprocessing_router
-
-# Добавление маршрутов к приложению
+# --- API Routers ---
 app.include_router(datasets_router, prefix="/api/datasets", tags=["datasets"])
-app.include_router(preprocessing_router, prefix="/api/preprocessing", tags=["preprocessing"])
+app.include_router(
+    preprocessing_router, prefix="/api/preprocessing", tags=["preprocessing"]
+)
 
-@app.get("/")
-async def read_root():
-    return {"message": "Добро пожаловать в API Конструктора предобработки данных"}
 
-@app.get("/health")
-async def health_check():
-    """
-    Эндпоинт для проверки работоспособности сервиса.
-    Используется для мониторинга и проверок доступности.
-    """
-    return {"status": "healthy", "timestamp": time.time()}
-
-# Создание директорий для данных
+# --- Lifespan Events ---
 @app.on_event("startup")
 async def startup_event():
-    # Директории для хранения данных
-    from config.settings import UPLOAD_DIR, PROCESSED_DIR, TEMP_DIR
-    
-    # Создаем директории, если они не существуют
-    for directory in [UPLOAD_DIR, PROCESSED_DIR, TEMP_DIR]:
-        directory.mkdir(parents=True, exist_ok=True)
-    
-    logger.info("Приложение запущено, директории созданы")
+    """Actions to perform on application startup: create data directories."""
+    try:
+        for directory in [
+            settings.UPLOAD_DIR,
+            settings.PROCESSED_DIR,
+            settings.TEMP_DIR,
+        ]:
+            Path(directory).mkdir(parents=True, exist_ok=True)
+        logger.info("Application startup complete. Data directories are ready.")
+    except Exception as e:
+        logger.error(f"Error during startup directory creation: {e}", exc_info=True)
 
-# Очистка временных данных при завершении
+
 @app.on_event("shutdown")
 async def shutdown_event():
+    """Actions to perform on application shutdown: clean up temporary files."""
+    logger.info("Application shutting down...")
     try:
-        # Очистка временных файлов
-        TEMP_DIR = Path("./data/temp")
-        if TEMP_DIR.exists():
-            for file in TEMP_DIR.iterdir():
+        temp_dir = Path(settings.TEMP_DIR)
+        if temp_dir.exists():
+            for file in temp_dir.iterdir():
                 try:
                     file.unlink()
-                except Exception as e:
-                    logger.warning(f"Не удалось удалить временный файл {file}: {str(e)}")
-        
-        logger.info("Приложение завершено, временные файлы очищены")
+                    logger.info(f"Removed temporary file: {file}")
+                except OSError as e:
+                    logger.warning(f"Failed to remove temp file {file}: {e}")
+        logger.info("Temporary files cleaned up successfully.")
     except Exception as e:
-        logger.error(f"Ошибка при завершении приложения: {str(e)}", exc_info=True)
+        logger.error(f"Error during shutdown cleanup: {e}", exc_info=True)
 
+
+# --- Root and Health Check ---
+@app.get("/", tags=["Root"])
+async def read_root():
+    """Welcome endpoint for the API."""
+    return {"message": "Welcome to the Data Preprocessing Constructor API"}
+
+
+@app.get("/health", tags=["Health Check"])
+async def health_check():
+    """Health check endpoint for monitoring service availability."""
+    return {"status": "healthy", "timestamp": time.time()}
+
+
+# --- Main Execution ---
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run(
+        "main:app",
+        host=settings.SERVER_HOST,
+        port=settings.SERVER_PORT,
+        reload=settings.RELOAD,
+    )

@@ -3,26 +3,27 @@
     <el-card class="welcome-card">
       <template #header>
         <div class="card-header">
-          <h2>Добро пожаловать в Конструктор предобработки данных</h2>
+          <h2>Welcome to the Data Preprocessing Builder</h2>
         </div>
       </template>
       <div class="card-content">
         <p>
-          Это инструмент для анализа и предобработки наборов данных. Система анализирует данные, поданные на вход, 
-          и предлагает выбор методов предобработки, подходящих для конкретного набора данных.
+          This is a tool for analyzing and preprocessing datasets. The system
+          analyzes the input data and suggests a selection of preprocessing
+          methods suitable for the specific dataset.
         </p>
-        
-        <h3>Основные возможности:</h3>
+
+        <h3>Key Features:</h3>
         <ul>
-          <li>Загрузка файлов CSV и Excel</li>
-          <li>Анализ структуры и качества данных</li>
-          <li>Предобработка табличных данных и временных рядов</li>
-          <li>Предпросмотр результатов и экспорт обработанных данных</li>
+          <li>Upload CSV and Excel files</li>
+          <li>Analyze data structure and quality</li>
+          <li>Preprocess tabular data and time series</li>
+          <li>Preview results and export processed data</li>
         </ul>
-        
+
         <div class="action-buttons">
           <el-button type="primary" size="large" @click="startProcess">
-            Начать работу
+            Get Started
           </el-button>
         </div>
       </div>
@@ -32,13 +33,13 @@
 
 <script>
 export default {
-  name: 'HomeView',
+  name: "HomeView",
   methods: {
     startProcess() {
-      this.$router.push('/upload');
-    }
-  }
-}
+      this.$router.push("/upload");
+    },
+  },
+};
 </script>
 
 <style scoped>

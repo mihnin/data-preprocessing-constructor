@@ -1,77 +1,74 @@
-from fastapi import UploadFile, HTTPException
-import os
 import shutil
 import logging
 from pathlib import Path
-from typing import Union
+from fastapi import UploadFile, HTTPException
 
-# Получаем абсолютный путь к текущему файлу
-CURRENT_DIR = Path(__file__).resolve().parent
+from config.settings import settings
 
-# Определяем абсолютные пути к директориям
-BASE_DIR = CURRENT_DIR.parent.parent
-UPLOAD_DIR = BASE_DIR / "data" / "uploads"
-PROCESSED_DIR = BASE_DIR / "data" / "processed"
-TEMP_DIR = BASE_DIR / "data" / "temp"
-
-# Создаем директории, если они не существуют
-for directory in [UPLOAD_DIR, PROCESSED_DIR, TEMP_DIR]:
-    directory.mkdir(parents=True, exist_ok=True)
+logger = logging.getLogger(__name__)
 
 async def save_uploaded_file(file: UploadFile, file_id: str, extension: str) -> Path:
     """
-    Сохраняет загруженный файл в директории uploads.
-    
+    Saves an uploaded file securely to the designated uploads directory.
+
+    The file is first saved to a temporary location and then moved to the final
+    destination to prevent partial file writes.
+
     Args:
-        file: Загруженный файл
-        file_id: Уникальный идентификатор файла
-        extension: Расширение файла
-    
+        file: The uploaded file object from FastAPI.
+        file_id: A unique identifier for the file.
+        extension: The file's extension.
+
     Returns:
-        Path: Путь к сохраненному файлу
+        The path to the saved file.
+
+    Raises:
+        HTTPException: If the file cannot be saved.
     """
-    file_path = UPLOAD_DIR / f"{file_id}.{extension}"
-    
+    file_path = settings.UPLOAD_DIR / f"{file_id}.{extension}"
+    temp_path = settings.TEMP_DIR / f"temp_{file_id}.{extension}"
+
     try:
-        # Сохраняем файл во временной директории сначала
-        temp_path = TEMP_DIR / f"{file_id}_temp.{extension}"
+        # Save the file to a temporary location first
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # Перемещаем файл в директорию загрузок
+        # Move the file to its final destination
         shutil.move(temp_path, file_path)
         
+        logger.info(f"Successfully saved uploaded file to {file_path}")
         return file_path
     
     except Exception as e:
-        logging.error(f"Ошибка сохранения файла: {str(e)}", exc_info=True)
+        logger.error(f"Failed to save uploaded file: {e}", exc_info=True)
+        # Clean up any partial files
         if file_path.exists():
             file_path.unlink()
         if temp_path.exists():
             temp_path.unlink()
-        raise HTTPException(status_code=500, detail=f"Ошибка сохранения файла: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Could not save file: {e}")
 
 def get_file_path_by_id(file_id: str, extension: str) -> Path:
     """
-    Получает путь к файлу по его идентификатору.
-    
+    Constructs the path to an original uploaded file using its ID and extension.
+
     Args:
-        file_id: Идентификатор файла
-        extension: Расширение файла
-    
+        file_id: The unique identifier of the file.
+        extension: The file's extension.
+
     Returns:
-        Path: Путь к файлу
+        The full path to the file in the uploads directory.
     """
-    return UPLOAD_DIR / f"{file_id}.{extension}"
+    return settings.UPLOAD_DIR / f"{file_id}.{extension}"
 
 def get_processed_file_path(result_id: str) -> Path:
     """
-    Получает путь к обработанному файлу по идентификатору результата.
-    
+    Constructs the path to a processed data file using its result ID.
+
     Args:
-        result_id: Идентификатор результата
-    
+        result_id: The unique identifier of the processing result.
+
     Returns:
-        Path: Путь к обработанному файлу
+        The full path to the processed CSV file.
     """
-    return PROCESSED_DIR / f"{result_id}.csv"
+    return settings.PROCESSED_DIR / f"{result_id}.csv"
